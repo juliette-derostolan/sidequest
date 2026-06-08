@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="SideQuest"/>
+<meta name="theme-color" content="#10b981"/>
+<title>SideQuest</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;overscroll-behavior:none}
+  input,select,textarea{font-family:inherit;outline:none;-webkit-appearance:none}
+  button{font-family:inherit;cursor:pointer}
+  ::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ─── STORAGE ───────────────────────────────────────────
+const LS = {
+  get(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch{ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
+};
+
+// ─── CONSTANTS ─────────────────────────────────────────
+const THEMES = {
+  emerald:{name:"Émeraude",p:"#10b981",l:"#d1fae5",d:"#065f46",b:"#6ee7b7",bg:"#f0fdf4"},
+  violet: {name:"Violet",  p:"#7c3aed",l:"#ede9fe",d:"#3b0764",b:"#c4b5fd",bg:"#faf5ff"},
+  amber:  {name:"Ambre",   p:"#d97706",l:"#fef3c7",d:"#78350f",b:"#fde68a",bg:"#fffbeb"},
+  rose:   {name:"Rose",    p:"#e11d48",l:"#ffe4e6",d:"#881337",b:"#fecdd3",bg:"#fff1f2"},
+  sky:    {name:"Ciel",    p:"#0284c7",l:"#e0f2fe",d:"#0c4a6e",b:"#bae6fd",bg:"#f0f9ff"},
+};
+const CATS = [
+  {id:"culture",label:"Culture",   icon:"📚"},
+  {id:"sport",  label:"Sport",     icon:"🏃"},
+  {id:"creatif",label:"Créativité",icon:"🎨"},
+  {id:"perso",  label:"Dev perso", icon:"🧠"},
+  {id:"cuisine",label:"Cuisine",   icon:"🍳"},
+  {id:"cinema", label:"Cinéma",    icon:"🎬"},
+  {id:"langues",label:"Langues",   icon:"🗣️"},
+  {id:"musique",label:"Musique",   icon:"🎵"},
+  {id:"autre",  label:"Autre",     icon:"✨"},
+];
+const DIFFS = [
+  {id:"easy",  label:"Facile",   xp:50,  color:"#10b981"},
+  {id:"medium",label:"Moyen",    xp:120, color:"#f59e0b"},
+  {id:"hard",  label:"Difficile",xp:250, color:"#ef4444"},
+];
+const EXPRESS = [
+  {title:"20 min sans téléphone",desc:"Travaille sur une tâche repoussée.", cat:"perso",  xp:60},
+  {title:"Lis 10 pages",         desc:"N'importe quel livre ou article.",   cat:"culture",xp:50},
+  {title:"Étire-toi 10 min",     desc:"Corps débloqué = esprit débloqué.", cat:"sport",  xp:40},
+  {title:"Écris 5 idées",        desc:"Peu importe le sujet.",             cat:"creatif",xp:55},
+  {title:"Range un espace",      desc:"Bureau, chambre, sac.",             cat:"perso",  xp:45},
+  {title:"Regarde un court",     desc:"Moins de 20 min de cinéma.",        cat:"cinema", xp:50},
+];
+const catMap  = Object.fromEntries(CATS.map(c=>[c.id,c]));
+const diffMap = Object.fromEntries(DIFFS.map(d=>[d.id,d]));
+const uid   = ()=>Math.random().toString(36).slice(2,10);
+const fmtDate = ()=>new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+const lvlName = l=>l<5?"Novice":l<10?"Aventurier":l<20?"Explorateur":l<50?"Héros":"Légende";
+const xpFor   = l=>l*200;
+
+// ─── APP STATE ─────────────────────────────────────────
+const DEFAULT_STATE = {
+  themeKey:"emerald",
+  quests:[], folders:[], log:[],
+  xp:0, level:1, streak:0, xpToday:0, dailyGoal:200,
+  guildName:"", guildCode:"", guildMembers:[], guildChallenges:[],
+  playerName:"", playerAvatar:"⚔️",
+};
+
+let S = LS.get("sq_state");
+// First launch — show onboarding
+if(!S){ S = JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+// Ensure new fields exist for old saves
+if(!S.guildName)      S.guildName="";
+if(!S.guildCode)      S.guildCode="";
+if(!S.guildMembers)   S.guildMembers=[];
+if(!S.guildChallenges)S.guildChallenges=[];
+if(!S.xpToday)        S.xpToday=0;
+if(!S.dailyGoal)      S.dailyGoal=200;
+if(!S.log)            S.log=[];
+if(!S.playerName)     S.playerName="Joueur";
+if(!S.playerAvatar)   S.playerAvatar="⚔️";
+
+function save(){ LS.set("sq_state",S); }
+function patch(obj){ Object.assign(S,obj); save(); render(); }
+
+// ─── UI HELPERS ────────────────────────────────────────
+const T = ()=>THEMES[S.themeKey];
+const el = (tag,attr={},children=[])=>{
+  const e=document.createElement(tag);
+  for(const[k,v] of Object.entries(attr)){
+    if(k==="style"&&typeof v==="object") Object.assign(e.style,v);
+    else if(k.startsWith("on"))          e.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="html")                  e.innerHTML=v;
+    else                                 e.setAttribute(k,v);
+  }
+  for(const c of children){
+    if(c==null||c===false) continue;
+    e.appendChild(typeof c==="string"?document.createTextNode(c):c);
+  }
+  return e;
+};
+const div  = (s,ch)=>el("div",{style:s},ch||[]);
+const btn  = (txt,s,cb)=>el("button",{style:s,onClick:cb},[txt]);
+const inp  = (ph,val,cb,extra={})=>{ const e=el("input",{placeholder:ph,value:val||"",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",marginBottom:"10px",boxSizing:"border-box",...(extra.style||{})},...extra}); e.addEventListener("input",cb); return e; };
+const sel  = (opts,val,cb,s={})=>{ const e=el("select",{style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",...s}}); opts.forEach(([v,l])=>{ const o=el("option",{value:v},[l]); if(v===val)o.selected=true; e.appendChild(o); }); e.addEventListener("change",cb); return e; };
+const pill = (active,label,cb)=>{const t=T(); return btn(label,{background:active?t.p:"#fff",color:active?"#fff":"#6b7280",border:`1px solid ${active?t.p:"#e5e7eb"}`,borderRadius:"20px",padding:"5px 12px",fontSize:"12px",fontWeight:active?"600":"400",whiteSpace:"nowrap"},cb);};
+
+function modal(content, onClose){
+  const overlay=div({position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"flex-end",zIndex:"200"});
+  const box=div({background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",width:"100%",maxWidth:"400px",margin:"0 auto",maxHeight:"88vh",overflowY:"auto"});
+  overlay.addEventListener("click",()=>{ overlay.remove(); if(onClose)onClose(); });
+  box.addEventListener("click",e=>e.stopPropagation());
+  box.appendChild(content);
+  overlay.appendChild(box);
+  document.getElementById("app").appendChild(overlay);
+  return overlay;
+}
+
+function xpArc(xpToday,goal){
+  const t=T(), pct=Math.min(100,Math.round((xpToday/goal)*100));
+  const r=54,cx=70,cy=70, circ=Math.PI*r, dash=circ*(pct/100);
+  const ns="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("width","140"); svg.setAttribute("height","80"); svg.setAttribute("viewBox","0 0 140 80");
+  const arc=(stroke,sd)=>{ const p=document.createElementNS(ns,"path"); p.setAttribute("d",`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`); p.setAttribute("fill","none"); p.setAttribute("stroke",stroke); p.setAttribute("stroke-width","12"); p.setAttribute("stroke-linecap","round"); if(sd) p.setAttribute("stroke-dasharray",sd); return p; };
+  svg.appendChild(arc("#e5e7eb",null));
+  svg.appendChild(arc(t.p,`${dash} ${circ}`));
+  const txt1=document.createElementNS(ns,"text"); txt1.setAttribute("x",cx); txt1.setAttribute("y",cy-8); txt1.setAttribute("text-anchor","middle"); txt1.setAttribute("font-size","18"); txt1.setAttribute("font-weight","700"); txt1.setAttribute("fill",t.d); txt1.textContent=xpToday; svg.appendChild(txt1);
+  const txt2=document.createElementNS(ns,"text"); txt2.setAttribute("x",cx); txt2.setAttribute("y",cy+8); txt2.setAttribute("text-anchor","middle"); txt2.setAttribute("font-size","11"); txt2.setAttribute("fill","#9ca3af"); txt2.textContent=`/ ${goal} XP`; svg.appendChild(txt2);
+  return svg;
+}
+
+// ─── ONBOARDING ────────────────────────────────────────
+function showOnboarding(onDone){
+  const t=T();
+  const avatars=["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
+  let chosenAvatar="⚔️";
+
+  // Step 1 overlay
+  const overlay=div({position:"fixed",inset:"0",background:t.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",zIndex:"500"});
+
+  const logo=el("div",{style:{fontWeight:"800",fontSize:"32px",color:t.d,letterSpacing:"-1px",marginBottom:"8px"}},["⚔️ SideQuest"]);
+  const sub=el("div",{style:{fontSize:"15px",color:"#6b7280",marginBottom:"36px",textAlign:"center"}},["Transforme ta vie en aventure."]);
+
+  const nameLabel=el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start"}},["Comment tu t'appelles ?"]);
+  const nameInp=el("input",{placeholder:"Ton pseudo...",style:{width:"100%",border:"2px solid "+t.b,borderRadius:"12px",padding:"12px 16px",fontSize:"16px",marginBottom:"24px",boxSizing:"border-box",outline:"none"}});
+  nameInp.addEventListener("focus",()=>nameInp.style.borderColor=t.p);
+  nameInp.addEventListener("blur", ()=>nameInp.style.borderColor=t.b);
+
+  const avatarLabel=el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start"}},["Choisis ton avatar"]);
+
+  const avatarBtns=[];
+  function refreshAv(){
+    avatarBtns.forEach((b,i)=>{
+      b.style.background=avatars[i]===chosenAvatar?t.l:"#fff";
+      b.style.border="2px solid "+(avatars[i]===chosenAvatar?t.p:"#e5e7eb");
+      b.style.transform=avatars[i]===chosenAvatar?"scale(1.12)":"scale(1)";
+    });
+  }
+  const avatarGrid=div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"10px",marginBottom:"32px",width:"100%"},
+    avatars.map(a=>{
+      const b=div({background:a===chosenAvatar?t.l:"#fff",border:"2px solid "+(a===chosenAvatar?t.p:"#e5e7eb"),borderRadius:"14px",padding:"12px",textAlign:"center",fontSize:"28px",cursor:"pointer",transition:"all 0.15s"},[a]);
+      b.addEventListener("click",()=>{ chosenAvatar=a; refreshAv(); });
+      avatarBtns.push(b);
+      return b;
+    })
+  );
+
+  const startBtn=btn("Commencer l'aventure →",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"14px",padding:"14px",fontWeight:"700",fontSize:"16px",cursor:"pointer"},()=>{
+    const name=nameInp.value.trim();
+    if(!name){ nameInp.style.borderColor="#ef4444"; nameInp.focus(); return; }
+    S.playerName=name;
+    S.playerAvatar=chosenAvatar;
+    save();
+    overlay.remove();
+    onDone();
+  });
+
+  overlay.append(logo,sub,nameLabel,nameInp,avatarLabel,avatarGrid,startBtn);
+  document.getElementById("app").appendChild(overlay);
+}
+
+
+let currentTab = "home";
+
+// ─── RENDER ENGINE ─────────────────────────────────────
+function render(){
+  const t=T();
+  const app=document.getElementById("app");
+
+  // preserve modals
+  const modals=[...app.children].filter(c=>c.style.zIndex==="200");
+  app.innerHTML="";
+  modals.forEach(m=>app.appendChild(m));
+
+  // ── LEVEL UP TOAST ──
+  // (shown via separate call)
+
+  // ── HEADER ──
+  const xpNeeded=xpFor(S.level), xpPct=Math.min(100,Math.round((S.xp/xpNeeded)*100));
+  const hdr=div({background:"#fff",borderBottom:`1.5px solid ${t.b}`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"},[
+    div({},[
+      el("div",{style:{fontWeight:"700",fontSize:"20px",color:t.d,letterSpacing:"-0.5px"}},[" SideQuest"]),
+      el("div",{style:{fontSize:"11px",color:"#9ca3af"}},["Ton aventure commence ici"]),
+    ]),
+    div({display:"flex",alignItems:"center",gap:"8px"},[
+      btn("🎨",{background:t.l,border:`1px solid ${t.b}`,borderRadius:"20px",padding:"4px 10px",fontSize:"11px",fontWeight:"600",color:t.d},()=>openThemes()),
+      div({textAlign:"right"},[
+        el("div",{style:{fontWeight:"600",fontSize:"13px",color:t.d}},[`Niv. ${S.level} · ${lvlName(S.level)}`]),
+        el("div",{style:{fontSize:"11px",color:"#9ca3af"}},[`${S.xp}/${xpNeeded} XP`]),
+      ]),
+    ]),
+  ]);
+  const xpBar=div({background:"#e5e7eb",height:"5px"},[div({background:t.p,width:`${xpPct}%`,height:"5px",transition:"width 0.5s"})]);
+
+  // ── CONTENT ──
+  let content;
+  if(currentTab==="home")    content=renderHome();
+  else if(currentTab==="quests")  content=renderQuests();
+  else if(currentTab==="folders") content=renderFolders();
+  else if(currentTab==="guild")   content=renderGuild();
+  else if(currentTab==="journal") content=renderJournal();
+  else if(currentTab==="profil")  content=renderProfil();
+
+  const wrap=div({padding:"16px 16px 80px",overflowY:"auto",maxHeight:"calc(100vh - 80px)"},[content]);
+
+  // ── NAV ──
+  const navItems=[
+    {id:"home",icon:"🏠",label:"Accueil"},
+    {id:"quests",icon:"⚔️",label:"Quêtes"},
+    {id:"folders",icon:"📁",label:"Dossiers"},
+    {id:"guild",icon:"🏰",label:"Guilde"},
+    {id:"journal",icon:"📖",label:"Journal"},
+    {id:"profil",icon:"👤",label:"Profil"},
+  ];
+  const nav=div({position:"fixed",bottom:"0",left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"400px",background:"#fff",borderTop:"1px solid #e5e7eb",display:"grid",gridTemplateColumns:`repeat(${navItems.length},1fr)`,padding:"6px 0 8px",zIndex:"100"},
+    navItems.map(n=>{
+      const active=currentTab===n.id;
+      const b=div({display:"flex",flexDirection:"column",alignItems:"center",gap:"1px",padding:"3px 0",cursor:"pointer"},[
+        el("span",{style:{fontSize:"17px"}},[n.icon]),
+        el("span",{style:{fontSize:"9px",fontWeight:active?"700":"400",color:active?t.d:"#9ca3af"}},[n.label]),
+        active?div({width:"3px",height:"3px",borderRadius:"50%",background:t.p}):null,
+      ]);
+      b.addEventListener("click",()=>{ currentTab=n.id; render(); });
+      return b;
+    })
+  );
+
+  const container=div({maxWidth:"400px",margin:"0 auto",minHeight:"100vh",background:t.bg},[hdr,xpBar,wrap]);
+  app.insertBefore(container,app.firstChild);
+  app.appendChild(nav);
+}
+
+// ─── HOME ──────────────────────────────────────────────
+function renderHome(){
+  const t=T();
+  const active=S.quests.filter(q=>q.status==="active");
+  const dailyPct=Math.min(100,Math.round((S.xpToday/S.dailyGoal)*100));
+
+  const stats=div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"14px"},
+    [{label:"XP total",val:S.xp+S.level*xpFor(S.level)},{label:"Quêtes",val:S.quests.filter(q=>q.status==="done").length},{label:"Streak",val:`${S.streak}j`}].map(s=>
+      div({background:"#fff",border:`1px solid ${t.b}`,borderRadius:"12px",padding:"12px 10px",textAlign:"center"},[
+        el("div",{style:{fontSize:"18px",fontWeight:"700",color:t.d}},[String(s.val)]),
+        el("div",{style:{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}},[s.label]),
+      ])
+    )
+  );
+
+  const arcWrap=div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"},[
+    xpArc(S.xpToday,S.dailyGoal),
+    div({},[
+      el("div",{style:{fontWeight:"700",fontSize:"14px",color:t.d,marginBottom:"4px"}},["Objectif du jour"]),
+      el("div",{style:{fontSize:"12px",color:"#6b7280",lineHeight:"1.5"}},["Atteins ton objectif quotidien."]),
+      dailyPct>=100?el("div",{style:{marginTop:"6px",fontSize:"13px",fontWeight:"600",color:t.p}},["🎉 Objectif atteint !"]):null,
+    ]),
+  ]);
+
+  const express=div({background:t.l,border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"14px",marginBottom:"14px"},[
+    el("div",{style:{fontWeight:"700",fontSize:"14px",color:t.d,marginBottom:"3px"}},["⚡ Quête Express"]),
+    el("div",{style:{fontSize:"12px",color:t.d,opacity:"0.7",marginBottom:"10px"}},["Anti-procrastination — 15 min max"]),
+    btn("Lancer →",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"9px",fontWeight:"600",fontSize:"13px",width:"100%"},()=>openExpress()),
+  ]);
+
+  const questsSection=div({},[
+    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["En cours"]),
+    ...active.slice(0,3).map(q=>questCard(q,true)),
+    active.length===0?el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"13px",padding:"20px 0"}},["Aucune quête active. Lance-toi !"]):null,
+  ]);
+
+  return div({},[stats,arcWrap,express,questsSection]);
+}
+
+// ─── QUEST CARD ────────────────────────────────────────
+function questCard(q, slim=false){
+  const t=T();
+  const cat=catMap[q.cat]||{icon:"✨"};
+  const diff=diffMap[q.diff]||DIFFS[0];
+  const isDone=q.status==="done", isWaiting=q.status==="waiting";
+  const progress=q.subs.length>0?Math.round((q.subsChecked.filter(Boolean).length/q.subs.length)*100):0;
+
+  const tags=div({display:"flex",gap:"4px",flexWrap:"wrap",justifyContent:"flex-end",flexShrink:"0"},[
+    isWaiting?el("span",{style:{background:"#f3f4f6",borderRadius:"8px",padding:"3px 7px",fontSize:"11px",color:"#6b7280",fontWeight:"600"}},["⏳"]):null,
+    el("span",{style:{fontSize:"11px",fontWeight:"600",color:diff.color,background:diff.color+"18",borderRadius:"8px",padding:"3px 7px"}},[diff.label]),
+    el("span",{style:{fontSize:"11px",fontWeight:"600",color:t.d,background:t.l,borderRadius:"8px",padding:"3px 7px"}},[`${q.xp} XP`]),
+  ]);
+
+  const titleRow=div({display:"flex",justifyContent:"space-between",alignItems:"flex-start"},[
+    div({flex:"1",paddingRight:"8px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:isDone?"#6b7280":"#111827",textDecoration:isDone?"line-through":"none"}},[`${cat.icon} ${q.title}`]),
+      q.desc?el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"2px"}},[q.desc]):null,
+    ]),
+    tags,
+  ]);
+
+  let subsEl=null;
+  if(!isDone&&q.subs.length>0){
+    const bar=div({background:"#e5e7eb",borderRadius:"4px",height:"4px",marginBottom:"6px"},[div({background:t.p,width:`${progress}%`,height:"4px",borderRadius:"4px"})]);
+    const items=q.subs.map((s,i)=>{
+      const check=div({width:"15px",height:"15px",borderRadius:"4px",border:`2px solid ${q.subsChecked[i]?t.p:"#d1d5db"}`,background:q.subsChecked[i]?t.p:"#fff",flexShrink:"0",display:"flex",alignItems:"center",justifyContent:"center"},[
+        q.subsChecked[i]?el("span",{style:{color:"#fff",fontSize:"9px"}},["✓"]):null
+      ]);
+      const row=div({display:"flex",alignItems:"center",gap:"8px",padding:"3px 0",cursor:"pointer"},[
+        check,el("span",{style:{fontSize:"13px",color:q.subsChecked[i]?"#9ca3af":"#374151",textDecoration:q.subsChecked[i]?"line-through":"none"}},[s])
+      ]);
+      row.addEventListener("click",()=>{
+        q.subsChecked[i]=!q.subsChecked[i]; save(); render();
+      });
+      return row;
+    });
+    subsEl=div({marginTop:"8px"},[bar,...items]);
+  }
+
+  const btns=[];
+  if(!slim){
+    if(!isDone&&q.status==="active")  btns.push(btn("✓ Terminer",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>completeQuest(q.id)));
+    if(!isDone&&q.status==="waiting") btns.push(btn("▶ Démarrer",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>{ q.status="active"; save(); render(); }));
+    if(isDone) btns.push(btn("↩ Annuler",{background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",borderRadius:"8px",padding:"6px 12px",fontSize:"12px"},()=>undoneQuest(q.id)));
+    btns.push(btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>openEditQuest(q)));
+    btns.push(btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>{ S.quests=S.quests.filter(x=>x.id!==q.id); save(); render(); }));
+  } else {
+    if(!isDone&&q.status==="active")  btns.push(btn("✓ Terminer",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>completeQuest(q.id)));
+    if(!isDone&&q.status==="waiting") btns.push(btn("▶ Démarrer",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>{ q.status="active"; save(); render(); }));
+  }
+
+  return div({background:isDone?"#f9fafb":"#fff",border:`1px solid ${isDone?"#e5e7eb":t.b}`,borderRadius:"14px",padding:"14px",marginBottom:"10px",opacity:isDone?"0.8":"1"},[
+    titleRow, subsEl,
+    btns.length>0?div({display:"flex",gap:"8px",marginTop:"12px",flexWrap:"wrap"},btns):null,
+  ]);
+}
+
+function completeQuest(id){
+  const q=S.quests.find(x=>x.id===id); if(!q||q.status==="done") return;
+  q.status="done";
+  S.xp+=q.xp; S.xpToday+=q.xp;
+  if(S.xp>=xpFor(S.level)){ S.xp-=xpFor(S.level); S.level++; showLevelUp(); }
+  S.log.unshift({date:fmtDate(),text:`Tu as terminé '${q.title}'. +${q.xp} XP.`});
+  save(); render();
+}
+function undoneQuest(id){
+  const q=S.quests.find(x=>x.id===id); if(!q||q.status!=="done") return;
+  q.status="active";
+  S.xp=Math.max(0,S.xp-q.xp); S.xpToday=Math.max(0,S.xpToday-q.xp);
+  S.log.unshift({date:fmtDate(),text:`Quête '${q.title}' remise en cours.`});
+  save(); render();
+}
+function showLevelUp(){
+  const t=T();
+  const toast=div({position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",background:t.p,color:"#fff",padding:"12px 28px",borderRadius:"99px",fontWeight:"700",fontSize:"15px",zIndex:"300",boxShadow:"0 4px 20px rgba(0,0,0,0.15)"},[`✨ Niveau ${S.level} atteint !`]);
+  document.getElementById("app").appendChild(toast);
+  setTimeout(()=>toast.remove(),2500);
+}
+
+// ─── QUESTS TAB ────────────────────────────────────────
+let qFilter={groupBy:"statut",cat:"all",diff:"all",sort:"default"};
+function renderQuests(){
+  const t=T();
+  let list=[...S.quests];
+  if(qFilter.cat!=="all")  list=list.filter(q=>q.cat===qFilter.cat);
+  if(qFilter.diff!=="all") list=list.filter(q=>q.diff===qFilter.diff);
+  if(qFilter.sort==="xp_desc")  list.sort((a,b)=>b.xp-a.xp);
+  if(qFilter.sort==="xp_asc")   list.sort((a,b)=>a.xp-b.xp);
+  if(qFilter.sort==="sub_desc") list.sort((a,b)=>b.subs.length-a.subs.length);
+  if(qFilter.sort==="sub_asc")  list.sort((a,b)=>a.subs.length-b.subs.length);
+
+  let groups=[];
+  if(qFilter.groupBy==="statut")    groups=[{key:"active",label:"En cours",items:list.filter(q=>q.status==="active")},{key:"waiting",label:"En attente",items:list.filter(q=>q.status==="waiting")},{key:"done",label:"Terminées",items:list.filter(q=>q.status==="done")}];
+  if(qFilter.groupBy==="catégorie") groups=CATS.map(c=>({key:c.id,label:`${c.icon} ${c.label}`,items:list.filter(q=>q.cat===c.id)})).filter(g=>g.items.length>0);
+  if(qFilter.groupBy==="difficulté")groups=DIFFS.map(d=>({key:d.id,label:d.label,color:d.color,items:list.filter(q=>q.diff===d.id)})).filter(g=>g.items.length>0);
+  if(qFilter.groupBy==="dossier")   groups=[...S.folders.map(f=>({key:f.id,label:`${f.icon} ${f.title}`,items:list.filter(q=>q.folderId===f.id)})),{key:"none",label:"📌 Sans dossier",items:list.filter(q=>!q.folderId)}].filter(g=>g.items.length>0);
+
+  const header=div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"},[
+    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Mes Quêtes"]),
+    div({display:"flex",gap:"6px"},[
+      btn("📁",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"10px",padding:"7px 10px",fontSize:"13px"},()=>openFolderCreate()),
+      btn("+ Créer",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"},()=>openCreateQuest()),
+    ]),
+  ]);
+
+  function filterRow(label,pills){
+    return div({marginBottom:"8px"},[
+      el("div",{style:{fontSize:"11px",fontWeight:"600",color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"5px"}},[label]),
+      div({display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"2px",flexWrap:"wrap"},pills),
+    ]);
+  }
+
+  const groupPills=[["statut","Statut"],["catégorie","Catégorie"],["difficulté","Difficulté"],["dossier","Dossier"]].map(([v,l])=>pill(qFilter.groupBy===v,l,()=>{ qFilter.groupBy=v; render(); }));
+  const catPills=[pill(qFilter.cat==="all","Tous",()=>{ qFilter.cat="all"; render(); }),...CATS.map(c=>pill(qFilter.cat===c.id,`${c.icon} ${c.label}`,()=>{ qFilter.cat=qFilter.cat===c.id?"all":c.id; render(); }))];
+  const diffPills=[pill(qFilter.diff==="all","Toutes",()=>{ qFilter.diff="all"; render(); }),...DIFFS.map(d=>pill(qFilter.diff===d.id,d.label,()=>{ qFilter.diff=qFilter.diff===d.id?"all":d.id; render(); }))];
+  const sortPills=[["default","Défaut"],["xp_desc","XP ↓"],["xp_asc","XP ↑"],["sub_desc","Long ↓"],["sub_asc","Court ↑"]].map(([v,l])=>pill(qFilter.sort===v,l,()=>{ qFilter.sort=v; render(); }));
+
+  const groupEls=groups.map(g=>{
+    const sep=div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"},[
+      div({height:"1px",flex:"1",background:"#e5e7eb"}),
+      el("span",{style:{fontSize:"12px",fontWeight:"700",color:g.color||t.d,textTransform:"uppercase",letterSpacing:"0.8px",whiteSpace:"nowrap"}},[`${g.label} (${g.items.length})`]),
+      div({height:"1px",flex:"1",background:"#e5e7eb"}),
+    ]);
+    const items=g.items.length===0
+      ?[el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"6px 0"}},["Aucune quête"])]
+      :g.items.map(q=>questCard(q,false));
+    return div({marginBottom:"20px"},[sep,...items]);
+  });
+
+  return div({},[header,filterRow("Grouper",groupPills),filterRow("Catégorie",catPills),filterRow("Difficulté",diffPills),filterRow("Trier",sortPills),div({marginBottom:"12px"}),...groupEls]);
+}
+
+// ─── FOLDERS ───────────────────────────────────────────
+let openFolderIds=new Set();
+function renderFolders(){
+  const t=T();
+  const header=div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"},[
+    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Dossiers"]),
+    btn("+ Dossier",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"},()=>openFolderCreate()),
+  ]);
+  if(S.folders.length===0) return div({},[header,el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"40px 0"}},["Aucun dossier. Crées-en un !"])]);
+
+  const fEls=S.folders.map(f=>{
+    const fq=S.quests.filter(q=>q.folderId===f.id);
+    const done=fq.filter(q=>q.status==="done").length;
+    const pct=fq.length>0?Math.round((done/fq.length)*100):0;
+    const isOpen=openFolderIds.has(f.id);
+    const summary=div({padding:"16px",cursor:"pointer"},[
+      div({display:"flex",alignItems:"center",gap:"10px"},[
+        el("div",{style:{fontSize:"28px"}},[f.icon]),
+        div({flex:"1"},[
+          el("div",{style:{fontWeight:"700",fontSize:"15px",color:"#111827"}},[f.title]),
+          f.desc?el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"1px"}},[f.desc]):null,
+          el("div",{style:{fontSize:"12px",color:t.d,marginTop:"4px"}},[`${done}/${fq.length} quêtes · ${pct}%`]),
+        ]),
+        el("span",{style:{fontSize:"18px",color:"#9ca3af"}},[isOpen?"▲":"▼"]),
+      ]),
+      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginTop:"10px"},[div({background:t.p,width:`${pct}%`,height:"6px",borderRadius:"4px"})]),
+    ]);
+    summary.addEventListener("click",()=>{ isOpen?openFolderIds.delete(f.id):openFolderIds.add(f.id); render(); });
+
+    let inner=null;
+    if(isOpen){
+      inner=div({borderTop:"1px solid #f3f4f6",padding:"12px 16px"},[
+        fq.length===0?el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"8px 0"}},["Aucune quête dans ce dossier."]):null,
+        ...fq.map(q=>questCard(q,true)),
+        div({display:"flex",gap:"8px",marginTop:"8px"},[
+          btn("✏️ Modifier",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>openEditFolder(f)),
+          btn("🗑️ Supprimer",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>{ S.folders=S.folders.filter(x=>x.id!==f.id); openFolderIds.delete(f.id); save(); render(); }),
+        ]),
+      ]);
+    }
+    return div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"16px",marginBottom:"12px",overflow:"hidden"},[summary,inner]);
+  });
+
+  return div({},[header,...fEls]);
+}
+
+// ─── GUILD ─────────────────────────────────────────────
+function renderGuild(){
+  const t=T();
+  const hasGuild=S.guildCode!=="";
+  const header=el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"16px"}},["⚔️ Guilde"]);
+
+  if(!hasGuild){
+    let form=null;
+    const wrap=div({},[
+      header,
+      div({background:t.l,border:`1px solid ${t.b}`,borderRadius:"14px",padding:"20px",textAlign:"center",marginBottom:"12px"},[
+        el("div",{style:{fontSize:"32px",marginBottom:"8px"}},["🏰"]),
+        el("div",{style:{fontWeight:"600",fontSize:"15px",color:t.d,marginBottom:"4px"}},["Aucune guilde"]),
+        el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"16px"}},["Crée ta guilde ou rejoins celle d'un ami"]),
+        div({display:"flex",gap:"10px"},[
+          btn("Créer",{flex:"1",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"10px",fontWeight:"600"},()=>{
+            const nameInp=inp("Nom de la guilde","",e=>{});
+            const c=div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginTop:"10px"},[
+              el("div",{style:{fontWeight:"600",marginBottom:"10px"}},["Nom de la guilde"]),
+              nameInp,
+              btn("Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"11px",fontWeight:"700"},()=>{
+                if(!nameInp.value.trim()) return;
+                S.guildName=nameInp.value.trim();
+                S.guildCode=Math.random().toString(36).slice(2,6).toUpperCase();
+                S.guildMembers=[{name:"Moi",xp:S.xp+S.level*xpFor(S.level),joined:fmtDate()}];
+                S.guildChallenges=[{id:uid(),title:"Lire 50 pages en commun",target:50,unit:"pages",contributions:{"Moi":0},done:false}];
+                save(); render();
+              }),
+            ]);
+            wrap.appendChild(c);
+          }),
+          btn("Rejoindre",{flex:"1",background:"#fff",color:t.d,border:`1px solid ${t.b}`,borderRadius:"10px",padding:"10px",fontWeight:"600"},()=>{
+            const codeInp=inp("Code (ex: AB12)","",e=>{});
+            const c=div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginTop:"10px"},[
+              el("div",{style:{fontWeight:"600",marginBottom:"10px"}},["Code d'invitation"]),
+              codeInp,
+              btn("Rejoindre",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"11px",fontWeight:"700"},()=>{
+                // Local only guild
+                if(!codeInp.value.trim()) return;
+                S.guildCode=codeInp.value.toUpperCase();
+                S.guildName="Guilde "+S.guildCode;
+                S.guildMembers=[{name:"Moi",xp:0,joined:fmtDate()}];
+                S.guildChallenges=[];
+                save(); render();
+              }),
+            ]);
+            wrap.appendChild(c);
+          }),
+        ]),
+      ]),
+    ]);
+    return wrap;
+  }
+
+  // Show guild
+  const lb=[...S.guildMembers].sort((a,b)=>b.xp-a.xp);
+  const challenges=S.guildChallenges;
+
+  const leaderboard=div({background:"#fff",border:`1px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px"},[
+    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🏆 Classement"]),
+    ...lb.map((m,i)=>div({display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",borderBottom:i<lb.length-1?"1px solid #f3f4f6":"none"},[
+      div({width:"24px",height:"24px",borderRadius:"50%",background:i===0?"#fbbf24":i===1?"#9ca3af":i===2?"#d97706":t.l,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:i<3?"#fff":t.d},[String(i+1)]),
+      el("div",{style:{flex:"1",fontWeight:m.name==="Moi"?"700":"400"}},[m.name+(m.name==="Moi"?" (moi)":"")]),
+      el("div",{style:{fontSize:"13px",fontWeight:"600",color:t.d}},[`${m.xp} XP`]),
+    ])),
+  ]);
+
+  const chalEls=challenges.map(ch=>{
+    const tot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
+    const pct=Math.min(100,Math.round((tot/ch.target)*100));
+    const contribInp=inp(`+ ${ch.unit}`,"",e=>{});
+    contribInp.type="number";
+    return div({background:"#fff",border:`1px solid ${ch.done?t.b:"#e5e7eb"}`,borderRadius:"14px",padding:"14px",marginBottom:"10px"},[
+      div({display:"flex",justifyContent:"space-between"},[
+        el("div",{style:{fontWeight:"600",fontSize:"14px"}},[ch.title]),
+        ch.done?el("span",{style:{background:t.l,color:t.d,borderRadius:"8px",padding:"3px 8px",fontSize:"12px",fontWeight:"700"}},["✓"]):null,
+      ]),
+      el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"2px"}},[`${tot}/${ch.target} ${ch.unit}`]),
+      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginTop:"8px",marginBottom:"8px"}),[div({background:t.p,width:`${pct}%`,height:"6px",borderRadius:"4px"})],
+      !ch.done?div({display:"flex",gap:"8px"},[
+        contribInp,
+        btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontWeight:"600"},()=>{
+          const val=parseInt(contribInp.value,10); if(!val||val<=0) return;
+          ch.contributions["Moi"]=(ch.contributions["Moi"]||0)+val;
+          const newTot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
+          if(newTot>=ch.target) ch.done=true;
+          save(); render();
+        }),
+      ]):null,
+    ]);
+  });
+
+  const newChalInp=inp("Nouveau défi…","",e=>{});
+  const addChalBtn=btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"9px 14px",fontWeight:"600"},()=>{
+    if(!newChalInp.value.trim()) return;
+    S.guildChallenges.push({id:uid(),title:newChalInp.value.trim(),target:100,unit:"points",contributions:{},done:false});
+    save(); render();
+  });
+
+  return div({},[
+    div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"},[
+      el("div",{style:{fontWeight:"700",fontSize:"16px",color:"#111827"}},[`⚔️ ${S.guildName}`]),
+      el("span",{style:{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"20px",padding:"4px 12px",fontSize:"12px",fontWeight:"700"}},[`#${S.guildCode}`]),
+    ]),
+    leaderboard,
+    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["🎯 Défis communs"]),
+    ...chalEls,
+    div({display:"flex",gap:"8px",marginTop:"4px"},[newChalInp,addChalBtn]),
+    btn("Quitter la guilde",{width:"100%",marginTop:"12px",background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"9px",fontSize:"13px"},()=>{
+      S.guildName=""; S.guildCode=""; S.guildMembers=[]; S.guildChallenges=[]; save(); render();
+    }),
+  ]);
+}
+
+// ─── JOURNAL ───────────────────────────────────────────
+function renderJournal(){
+  const t=T();
+  const dailyPct=Math.min(100,Math.round((S.xpToday/S.dailyGoal)*100));
+  const arcRow=div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"},[
+    xpArc(S.xpToday,S.dailyGoal),
+    div({},[
+      el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},["Aujourd'hui"]),
+      el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"4px"}},[`${S.xpToday} XP gagnés sur ${S.dailyGoal} XP visés`]),
+      el("div",{style:{fontSize:"12px",color:t.d,marginTop:"4px",fontWeight:"600"}},[`${S.quests.filter(q=>q.status==="done").length} quêtes terminées au total`]),
+    ]),
+  ]);
+  const entries=S.log.length===0
+    ?[el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"30px 0"}},["Lance-toi !"])]
+    :S.log.map(e=>div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"14px",marginBottom:"10px",borderLeft:`3px solid ${t.p}`},[
+        el("div",{style:{fontSize:"11px",color:"#9ca3af",marginBottom:"4px"}},[`📅 ${e.date}`]),
+        el("div",{style:{fontSize:"13px",color:"#374151",lineHeight:"1.5"}},[e.text]),
+      ]));
+  return div({},[
+    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"14px"}},["Journal d'aventure"]),
+    arcRow,
+    el("div",{style:{background:t.l,border:`1px solid ${t.b}`,borderRadius:"12px",padding:"12px 16px",marginBottom:"14px",fontSize:"13px",color:t.d,fontStyle:"italic"}},["\"Chaque quête accomplie est une page de ton histoire.\""]),
+    ...entries,
+  ]);
+}
+
+// ─── PROFIL ────────────────────────────────────────────
+function renderProfil(){
+  const t=T();
+  const xpNeeded=xpFor(S.level);
+  const xpPct=Math.min(100,Math.round((S.xp/xpNeeded)*100));
+
+  // — Skill bars —
+  const skillBars=CATS.map(c=>{
+    const done=S.quests.filter(q=>q.status==="done"&&q.cat===c.id).length;
+    const total=S.quests.filter(q=>q.cat===c.id).length;
+    const pct=total>0?Math.round((done/total)*100):0;
+    return div({marginBottom:"10px"},[
+      div({display:"flex",justifyContent:"space-between",marginBottom:"3px"},[
+        el("span",{style:{fontSize:"13px",color:"#374151"}},[c.icon+" "+c.label]),
+        el("span",{style:{fontSize:"12px",color:t.d,fontWeight:"600"}},[done+"/"+total]),
+      ]),
+      div({background:"#e5e7eb",borderRadius:"4px",height:"5px"},[
+        div({background:t.p,width:pct+"%",height:"5px",borderRadius:"4px"}),
+      ]),
+    ]);
+  });
+
+  // — Theme grid —
+  const themeGrid=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"},
+    Object.entries(THEMES).map(([k,th])=>{
+      const b=div({background:th.l,border:"2px solid "+(S.themeKey===k?th.p:th.b),borderRadius:"12px",padding:"10px",cursor:"pointer",display:"flex",alignItems:"center",gap:"8px"},[
+        div({width:"18px",height:"18px",borderRadius:"50%",background:th.p,flexShrink:"0"}),
+        el("span",{style:{fontSize:"13px",fontWeight:S.themeKey===k?"700":"400",color:th.d}},[th.name]),
+        S.themeKey===k?el("span",{style:{marginLeft:"auto"}},["✓"]):null,
+      ]);
+      b.addEventListener("click",()=>{ S.themeKey=k; save(); render(); });
+      return b;
+    })
+  );
+
+  // — Daily goal buttons —
+  const goalBtns=div({display:"flex",gap:"8px",marginBottom:"8px"},
+    [100,200,300,500].map(v=>{
+      const b=btn(String(v),{flex:"1",background:S.dailyGoal===v?t.p:"#f3f4f6",color:S.dailyGoal===v?"#fff":"#374151",border:"1px solid "+(S.dailyGoal===v?t.p:"#e5e7eb"),borderRadius:"8px",padding:"7px 0",fontSize:"13px",fontWeight:S.dailyGoal===v?"700":"400"},()=>{ S.dailyGoal=v; save(); render(); });
+      return b;
+    })
+  );
+  const customGoalInp=el("input",{type:"number",placeholder:"Objectif perso",min:"10",max:"9999",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"7px 10px",fontSize:"13px"}});
+  customGoalInp.addEventListener("keydown",e=>{ if(e.key==="Enter"&&parseInt(customGoalInp.value)>0){ S.dailyGoal=parseInt(customGoalInp.value,10); save(); render(); }});
+
+  return div({},[
+    // — Card profil —
+    div({background:"#fff",border:"1.5px solid "+t.b,borderRadius:"16px",padding:"20px",marginBottom:"14px",textAlign:"center"},[
+      div({width:"72px",height:"72px",borderRadius:"50%",background:t.l,border:"3px solid "+t.p,margin:"0 auto",marginBottom:"12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px"},[S.playerAvatar||"⚔️"]),
+      el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},[S.playerName||"Joueur"]),
+      el("div",{style:{fontSize:"13px",color:t.d,fontWeight:"600",marginTop:"4px"}},["Niv. "+S.level+" — "+lvlName(S.level)]),
+      el("div",{style:{display:"inline-block",marginTop:"8px",background:t.l,color:t.d,border:"1px solid "+t.b,borderRadius:"20px",padding:"4px 14px",fontSize:"12px",fontWeight:"600"}},["🏷️ "+lvlName(S.level)]),
+      div({display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"},[
+        btn("✏️ Modifier le profil",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>openEditProfil()),
+        btn("🔄 Nouveau profil",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>confirmResetProfil()),
+      ]),
+    ]),
+    // — Objectif quotidien —
+    div({background:"#fff",border:"1.5px solid "+t.b,borderRadius:"14px",padding:"16px",marginBottom:"14px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎯 Objectif XP quotidien"]),
+      xpArc(S.xpToday,S.dailyGoal),
+      div({marginTop:"12px"},[
+        el("div",{style:{fontSize:"13px",color:"#374151",marginBottom:"6px"}},["Modifier l'objectif :"]),
+        goalBtns,
+        div({display:"flex",gap:"8px",alignItems:"center"},[customGoalInp,el("span",{style:{fontSize:"12px",color:"#9ca3af"}},["↵ Entrée"])]),
+      ]),
+    ]),
+    // — XP bar —
+    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["Vers niveau "+(S.level+1)+" — "+xpPct+"%"]),
+      div({background:"#e5e7eb",borderRadius:"6px",height:"8px"},[
+        div({background:t.p,width:xpPct+"%",height:"8px",borderRadius:"6px",transition:"width 0.5s"}),
+      ]),
+    ]),
+    // — Compétences —
+    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["Compétences"]),
+      ...skillBars,
+    ]),
+    // — Thème —
+    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎨 Thème"]),
+      themeGrid,
+    ]),
+  ]);
+}
+
+function openEditProfil(){
+  const t=T();
+  const nameInp=inp("Ton pseudo *", S.playerName||"", e=>{});
+  const avatars=["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
+  let chosenAvatar=S.playerAvatar||"⚔️";
+
+  const avatarBtns=[];
+  function refreshAvatarBtns(){
+    avatarBtns.forEach((b,i)=>{
+      const a=avatars[i];
+      b.style.background=a===chosenAvatar?t.l:"#f9fafb";
+      b.style.border="2px solid "+(a===chosenAvatar?t.p:"#e5e7eb");
+    });
+  }
+
+  const avatarGrid=div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"14px"},
+    avatars.map(a=>{
+      const b=div({background:chosenAvatar===a?t.l:"#f9fafb",border:"2px solid "+(chosenAvatar===a?t.p:"#e5e7eb"),borderRadius:"12px",padding:"10px",textAlign:"center",fontSize:"24px",cursor:"pointer"},[a]);
+      b.addEventListener("click",()=>{ chosenAvatar=a; refreshAvatarBtns(); });
+      avatarBtns.push(b);
+      return b;
+    })
+  );
+
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["✏️ Modifier le profil"]),
+    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton pseudo"]),
+    nameInp,
+    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton avatar"]),
+    avatarGrid,
+    btn("Enregistrer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
+      if(!nameInp.value.trim()) return;
+      S.playerName=nameInp.value.trim();
+      S.playerAvatar=chosenAvatar;
+      save(); render(); m.remove();
+    }),
+    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+function confirmResetProfil(){
+  const t=T();
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"8px"}},["🔄 Nouveau profil"]),
+    el("div",{style:{fontSize:"14px",color:"#6b7280",marginBottom:"20px",lineHeight:"1.6"}},["Toute ta progression sera effacée (quêtes, XP, niveau, dossiers, journal). Cette action est irréversible."]),
+    btn("⚠️ Recommencer de zéro",{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
+      // Full wipe
+      localStorage.removeItem("sq_state");
+      for(const k of Object.keys(S)) delete S[k];
+      Object.assign(S, JSON.parse(JSON.stringify(DEFAULT_STATE)));
+      save(); m.remove();
+      currentTab="home";
+      // Remove any leftover UI then show onboarding
+      document.getElementById("app").innerHTML="";
+      showOnboarding(()=>render());
+    }),
+    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+// ─── MODALS ────────────────────────────────────────────
+function openExpress(){
+  const t=T();
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"4px"}},["⚡ Quête Express"]),
+    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"14px"}},["15 min max — clique pour valider"]),
+    ...EXPRESS.map(q=>{
+      const r=div({background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"12px 14px",marginBottom:"8px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"},[
+        div({},[
+          el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},[q.title]),
+          el("div",{style:{fontSize:"12px",color:"#6b7280"}},[q.desc]),
+        ]),
+        el("span",{style:{fontSize:"12px",fontWeight:"700",color:t.d,background:t.l,borderRadius:"8px",padding:"4px 8px",marginLeft:"8px"}},[`+${q.xp}`]),
+      ]);
+      r.addEventListener("click",()=>{
+        S.xp+=q.xp; S.xpToday+=q.xp; S.streak++;
+        if(S.xp>=xpFor(S.level)){ S.xp-=xpFor(S.level); S.level++; }
+        S.log.unshift({date:fmtDate(),text:`Mini-quête '${q.title}'. +${q.xp} XP !`});
+        save(); render(); m.remove();
+      });
+      return r;
+    }),
+    btn("Fermer",{width:"100%",marginTop:"4px",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+function openThemes(){
+  const t=T();
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["🎨 Thème"]),
+    div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"},
+      Object.entries(THEMES).map(([k,th])=>{
+        const b=div({background:th.l,border:`2px solid ${S.themeKey===k?th.p:th.b}`,borderRadius:"14px",padding:"14px 10px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"6px"},[
+          div({width:"32px",height:"32px",borderRadius:"50%",background:th.p}),
+          el("span",{style:{fontSize:"13px",fontWeight:"600",color:th.d}},[th.name]),
+          S.themeKey===k?el("span",{style:{fontSize:"11px",color:th.d,opacity:"0.7"}},["Actif ✓"]):null,
+        ]);
+        b.addEventListener("click",()=>{ S.themeKey=k; save(); render(); m.remove(); });
+        return b;
+      })
+    ),
+    btn("Fermer",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+function questForm(q, onSave){
+  const t=T();
+  const f={ title:q?.title||"", desc:q?.desc||"", cat:q?.cat||"culture", diff:q?.diff||"easy", subs:q?.subs?.join(", ")||"", folderId:q?.folderId||"", status:q?.status||"active" };
+
+  const titleInp=inp("Nom de la quête *",f.title,e=>f.title=e.target.value);
+  const descInp =inp("Description",       f.desc, e=>f.desc =e.target.value);
+  const catSel  =sel(CATS.map(c=>[c.id,`${c.icon} ${c.label}`]),    f.cat,  e=>f.cat=e.target.value);
+  const diffSel =sel(DIFFS.map(d=>[d.id,`${d.label} (${d.xp} XP)`]),f.diff, e=>f.diff=e.target.value);
+  const folderSel=sel([["","Aucun dossier"],...S.folders.map(fo=>[fo.id,`${fo.icon} ${fo.title}`])],f.folderId,e=>f.folderId=e.target.value,{width:"100%",marginBottom:"10px",boxSizing:"border-box"});
+  const subsInp =inp("Sous-objectifs (séparés par des virgules)",f.subs,e=>f.subs=e.target.value);
+
+  const waitChk=el("input",{type:"checkbox"}); waitChk.checked=f.status==="waiting"; waitChk.addEventListener("change",e=>f.status=e.target.checked?"waiting":"active");
+  const waitLbl=el("label",{style:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px",cursor:"pointer"}},[waitChk,"⏳ Démarrer plus tard"]);
+
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[q?"Modifier la quête":"Nouvelle quête"]),
+    titleInp, descInp,
+    div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"},[catSel,diffSel]),
+    folderSel, subsInp,
+    div({display:"flex",gap:"16px",marginBottom:"14px",flexWrap:"wrap"},[waitLbl]),
+    btn(q?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
+      if(!f.title.trim()) return;
+      onSave(f); m.remove();
+    }),
+    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+function openCreateQuest(){ questForm(null, f=>{ const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0]; const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean); S.quests.unshift({id:uid(),title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map(()=>false),folderId:f.folderId||null}); save(); render(); }); }
+function openEditQuest(q){ questForm(q, f=>{ const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0]; const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean); Object.assign(q,{title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map((_,i)=>q.subs[i]!==undefined?q.subsChecked[i]:false),folderId:f.folderId||null}); save(); render(); }); }
+
+function folderForm(folder, onSave){
+  const t=T();
+  const f={ title:folder?.title||"", desc:folder?.desc||"", icon:folder?.icon||"📁", cat:folder?.cat||"culture" };
+  const titleInp=inp("Nom du dossier *",f.title,e=>f.title=e.target.value);
+  const descInp =inp("Description",      f.desc, e=>f.desc =e.target.value);
+  const iconInp =el("input",{placeholder:"📁",value:f.icon,style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"22px",textAlign:"center",width:"80px"}}); iconInp.addEventListener("input",e=>f.icon=e.target.value);
+  const catSel  =sel(CATS.map(c=>[c.id,`${c.icon} ${c.label}`]),f.cat,e=>f.cat=e.target.value,{flex:"1"});
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[folder?"Modifier le dossier":"Nouveau dossier"]),
+    titleInp, descInp,
+    div({display:"grid",gridTemplateColumns:"80px 1fr",gap:"10px",marginBottom:"14px"},[iconInp,catSel]),
+    btn(folder?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{ if(!f.title.trim()) return; onSave(f); m.remove(); }),
+    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
+}
+
+function openFolderCreate(){ folderForm(null,f=>{ S.folders.unshift({id:uid(),...f}); save(); render(); }); }
+function openEditFolder(folder){ folderForm(folder,f=>{ Object.assign(folder,f); save(); render(); }); }
+
+// ─── BOOT ──────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
