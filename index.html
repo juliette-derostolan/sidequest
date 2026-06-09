@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="SideQuest"/>
@@ -11,903 +11,1248 @@
 <link rel="icon" type="image/png" href="logo.png">
 <title>SideQuest</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;overscroll-behavior:none}
-  input,select,textarea{font-family:inherit;outline:none;-webkit-appearance:none}
-  button{font-family:inherit;cursor:pointer}
-  ::-webkit-scrollbar{display:none}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;overscroll-behavior:none}
+input,select,textarea{font-family:inherit;outline:none;-webkit-appearance:none;border-radius:0}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{display:none}
 </style>
 </head>
 <body>
 <div id="app"></div>
-
 <script>
-// ─── STORAGE ───────────────────────────────────────────
-const LS = {
-  get(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch{ return null; } },
-  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
+"use strict";
+
+/* ═══════════════════════════════════════════════
+   STORAGE
+═══════════════════════════════════════════════ */
+var LS = {
+  get: function(k){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } },
+  set: function(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 };
 
-// ─── CONSTANTS ─────────────────────────────────────────
-const THEMES = {
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════ */
+var THEMES = {
   emerald:{name:"Émeraude",p:"#10b981",l:"#d1fae5",d:"#065f46",b:"#6ee7b7",bg:"#f0fdf4"},
-  violet: {name:"Violet",  p:"#7c3aed",l:"#ede9fe",d:"#3b0764",b:"#c4b5fd",bg:"#faf5ff"},
-  amber:  {name:"Ambre",   p:"#d97706",l:"#fef3c7",d:"#78350f",b:"#fde68a",bg:"#fffbeb"},
-  rose:   {name:"Rose",    p:"#e11d48",l:"#ffe4e6",d:"#881337",b:"#fecdd3",bg:"#fff1f2"},
-  sky:    {name:"Ciel",    p:"#0284c7",l:"#e0f2fe",d:"#0c4a6e",b:"#bae6fd",bg:"#f0f9ff"},
+  violet :{name:"Violet",  p:"#7c3aed",l:"#ede9fe",d:"#3b0764",b:"#c4b5fd",bg:"#faf5ff"},
+  amber  :{name:"Ambre",   p:"#d97706",l:"#fef3c7",d:"#78350f",b:"#fde68a",bg:"#fffbeb"},
+  rose   :{name:"Rose",    p:"#e11d48",l:"#ffe4e6",d:"#881337",b:"#fecdd3",bg:"#fff1f2"},
+  sky    :{name:"Ciel",    p:"#0284c7",l:"#e0f2fe",d:"#0c4a6e",b:"#bae6fd",bg:"#f0f9ff"}
 };
-const CATS = [
-  {id:"culture",label:"Culture",   icon:"📚"},
-  {id:"sport",  label:"Sport",     icon:"🏃"},
-  {id:"creatif",label:"Créativité",icon:"🎨"},
-  {id:"perso",  label:"Dev perso", icon:"🧠"},
-  {id:"cuisine",label:"Cuisine",   icon:"🍳"},
-  {id:"cinema", label:"Cinéma",    icon:"🎬"},
-  {id:"langues",label:"Langues",   icon:"🗣️"},
-  {id:"musique",label:"Musique",   icon:"🎵"},
-  {id:"autre",  label:"Autre",     icon:"✨"},
-];
-const DIFFS = [
-  {id:"easy",  label:"Facile",   xp:50,  color:"#10b981"},
-  {id:"medium",label:"Moyen",    xp:120, color:"#f59e0b"},
-  {id:"hard",  label:"Difficile",xp:250, color:"#ef4444"},
-];
-const EXPRESS = [
-  {title:"20 min sans téléphone",desc:"Travaille sur une tâche repoussée.", cat:"perso",  xp:60},
-  {title:"Lis 10 pages",         desc:"N'importe quel livre ou article.",   cat:"culture",xp:50},
-  {title:"Étire-toi 10 min",     desc:"Corps débloqué = esprit débloqué.", cat:"sport",  xp:40},
-  {title:"Écris 5 idées",        desc:"Peu importe le sujet.",             cat:"creatif",xp:55},
-  {title:"Range un espace",      desc:"Bureau, chambre, sac.",             cat:"perso",  xp:45},
-  {title:"Regarde un court",     desc:"Moins de 20 min de cinéma.",        cat:"cinema", xp:50},
-];
-const catMap  = Object.fromEntries(CATS.map(c=>[c.id,c]));
-const diffMap = Object.fromEntries(DIFFS.map(d=>[d.id,d]));
-const uid   = ()=>Math.random().toString(36).slice(2,10);
-const fmtDate = ()=>new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
-const lvlName = l=>l<5?"Novice":l<10?"Aventurier":l<20?"Explorateur":l<50?"Héros":"Légende";
-const xpFor   = l=>l*200;
 
-// ─── APP STATE ─────────────────────────────────────────
-const DEFAULT_STATE = {
+var CATS = [
+  {id:"culture", label:"Culture",    icon:"📚"},
+  {id:"sport",   label:"Sport",      icon:"🏃"},
+  {id:"creatif", label:"Créativité", icon:"🎨"},
+  {id:"perso",   label:"Dev perso",  icon:"🧠"},
+  {id:"cuisine", label:"Cuisine",    icon:"🍳"},
+  {id:"cinema",  label:"Cinéma",     icon:"🎬"},
+  {id:"langues", label:"Langues",    icon:"🗣️"},
+  {id:"musique", label:"Musique",    icon:"🎵"},
+  {id:"autre",   label:"Autre",      icon:"✨"}
+];
+
+var DIFFS = [
+  {id:"easy",  label:"Facile",    xp:50,  color:"#10b981"},
+  {id:"medium",label:"Moyen",     xp:120, color:"#f59e0b"},
+  {id:"hard",  label:"Difficile", xp:250, color:"#ef4444"}
+];
+
+var EXPRESS = [
+  {title:"20 min sans téléphone", desc:"Travaille sur une tâche repoussée.", cat:"perso",   xp:60},
+  {title:"Lis 10 pages",          desc:"N'importe quel livre ou article.",   cat:"culture", xp:50},
+  {title:"Étire-toi 10 min",      desc:"Corps débloqué = esprit débloqué.", cat:"sport",   xp:40},
+  {title:"Écris 5 idées",         desc:"Peu importe le sujet.",             cat:"creatif", xp:55},
+  {title:"Range un espace",       desc:"Bureau, chambre, sac.",             cat:"perso",   xp:45},
+  {title:"Regarde un court",      desc:"Moins de 20 min de cinéma.",        cat:"cinema",  xp:50}
+];
+
+var catMap  = {};
+CATS.forEach(function(c){ catMap[c.id]=c; });
+var diffMap = {};
+DIFFS.forEach(function(d){ diffMap[d.id]=d; });
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function fmtDate(){ return new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}); }
+function lvlName(l){ return l<5?"Novice":l<10?"Aventurier":l<20?"Explorateur":l<50?"Héros":"Légende"; }
+function xpFor(l){ return l*200; }
+
+/* ═══════════════════════════════════════════════
+   DEFAULT STATE  (clean slate — no demo data)
+═══════════════════════════════════════════════ */
+var DEFAULT_STATE = {
   themeKey:"emerald",
-  quests:[], folders:[], log:[],
+  quests:[],
+  folders:[],
+  log:[],
   xp:0, level:1, streak:0, xpToday:0, dailyGoal:200,
   guildName:"", guildChallenges:[],
-  playerName:"", playerAvatar:"⚔️",
+  playerName:"", playerAvatar:"⚔️"
 };
 
-let S = LS.get("sq_state");
-// First launch — show onboarding
+/* ═══════════════════════════════════════════════
+   LOAD / BOOT STATE
+═══════════════════════════════════════════════ */
+var S = LS.get("sq_state");
 if(!S){ S = JSON.parse(JSON.stringify(DEFAULT_STATE)); }
-// Ensure new fields exist for old saves
-if(!S.guildName)      S.guildName="";
-if(!S.guildChallenges)S.guildChallenges=[];
-if(!S.xpToday)        S.xpToday=0;
-if(!S.dailyGoal)      S.dailyGoal=200;
-if(!S.log)            S.log=[];
-if(!S.playerName)     S.playerName="Joueur";
-if(!S.playerAvatar)   S.playerAvatar="⚔️";
+// Guard missing fields (for old saves)
+if(!S.folders)         S.folders=[];
+if(!S.log)             S.log=[];
+if(!S.guildName)       S.guildName="";
+if(!S.guildChallenges) S.guildChallenges=[];
+if(!S.xpToday)         S.xpToday=0;
+if(!S.dailyGoal)       S.dailyGoal=200;
+if(!S.playerName)      S.playerName="";
+if(!S.playerAvatar)    S.playerAvatar="⚔️";
+if(!S.streak)          S.streak=0;
 
 function save(){ LS.set("sq_state",S); }
-function patch(obj){ Object.assign(S,obj); save(); render(); }
 
-// ─── UI HELPERS ────────────────────────────────────────
-const T = ()=>THEMES[S.themeKey];
-const el = (tag,attr={},children=[])=>{
-  const e=document.createElement(tag);
-  for(const[k,v] of Object.entries(attr)){
-    if(k==="style"&&typeof v==="object") Object.assign(e.style,v);
-    else if(k.startsWith("on"))          e.addEventListener(k.slice(2).toLowerCase(),v);
-    else if(k==="html")                  e.innerHTML=v;
-    else                                 e.setAttribute(k,v);
-  }
-  for(const c of children){
-    if(c==null||c===false) continue;
-    e.appendChild(typeof c==="string"?document.createTextNode(c):c);
-  }
+/* ═══════════════════════════════════════════════
+   DOM HELPERS
+═══════════════════════════════════════════════ */
+function el(tag, attrs, children){
+  var e = document.createElement(tag);
+  attrs = attrs || {};
+  children = children || [];
+  Object.keys(attrs).forEach(function(k){
+    var v = attrs[k];
+    if(k === "style" && typeof v === "object"){
+      Object.keys(v).forEach(function(sk){ e.style[sk]=v[sk]; });
+    } else if(k === "html"){
+      e.innerHTML = v;
+    } else {
+      e.setAttribute(k, v);
+    }
+  });
+  children.forEach(function(c){
+    if(c==null || c===false || c===undefined) return;
+    if(typeof c === "string" || typeof c === "number"){
+      e.appendChild(document.createTextNode(String(c)));
+    } else if(c instanceof Node){
+      e.appendChild(c);
+    }
+  });
   return e;
-};
-const div  = (s,ch)=>el("div",{style:s},ch||[]);
-const btn  = (txt,s,cb)=>el("button",{style:s,onClick:cb},[txt]);
-const inp  = (ph,val,cb,extra={})=>{ const e=el("input",{placeholder:ph,value:val||"",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",marginBottom:"10px",boxSizing:"border-box",...(extra.style||{})},...extra}); e.addEventListener("input",cb); return e; };
-const sel  = (opts,val,cb,s={})=>{ const e=el("select",{style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",...s}}); opts.forEach(([v,l])=>{ const o=el("option",{value:v},[l]); if(v===val)o.selected=true; e.appendChild(o); }); e.addEventListener("change",cb); return e; };
-const pill = (active,label,cb)=>{const t=T(); return btn(label,{background:active?t.p:"#fff",color:active?"#fff":"#6b7280",border:`1px solid ${active?t.p:"#e5e7eb"}`,borderRadius:"20px",padding:"5px 12px",fontSize:"12px",fontWeight:active?"600":"400",whiteSpace:"nowrap"},cb);};
+}
 
-function modal(content, onClose){
-  const overlay=div({position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"flex-end",zIndex:"200"});
-  const box=div({background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",width:"100%",maxWidth:"400px",margin:"0 auto",maxHeight:"88vh",overflowY:"auto"});
-  overlay.addEventListener("click",()=>{ overlay.remove(); if(onClose)onClose(); });
-  box.addEventListener("click",e=>e.stopPropagation());
-  box.appendChild(content);
+function div(style, children){
+  var e = document.createElement("div");
+  if(style && typeof style === "object"){
+    Object.keys(style).forEach(function(k){ e.style[k]=style[k]; });
+  }
+  (children||[]).forEach(function(c){
+    if(c==null || c===false || c===undefined) return;
+    if(typeof c === "string" || typeof c === "number"){
+      e.appendChild(document.createTextNode(String(c)));
+    } else if(c instanceof Node){
+      e.appendChild(c);
+    }
+  });
+  return e;
+}
+
+function btn(txt, style, cb){
+  var e = document.createElement("button");
+  if(style && typeof style === "object"){
+    Object.keys(style).forEach(function(k){ e.style[k]=style[k]; });
+  }
+  e.appendChild(document.createTextNode(String(txt)));
+  if(cb) e.addEventListener("click", cb);
+  return e;
+}
+
+function mkInput(placeholder, value, style){
+  var e = document.createElement("input");
+  e.placeholder = placeholder||"";
+  e.value = value||"";
+  var base = {width:"100%",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",marginBottom:"10px",boxSizing:"border-box"};
+  Object.keys(base).forEach(function(k){ e.style[k]=base[k]; });
+  if(style) Object.keys(style).forEach(function(k){ e.style[k]=style[k]; });
+  return e;
+}
+
+function mkSelect(options, value, style){
+  var e = document.createElement("select");
+  var base = {border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px"};
+  Object.keys(base).forEach(function(k){ e.style[k]=base[k]; });
+  if(style) Object.keys(style).forEach(function(k){ e.style[k]=style[k]; });
+  options.forEach(function(opt){
+    var o = document.createElement("option");
+    o.value = opt[0];
+    o.textContent = opt[1];
+    if(opt[0]===value) o.selected=true;
+    e.appendChild(o);
+  });
+  return e;
+}
+
+function pill(active, label, cb, T){
+  var e = document.createElement("button");
+  e.textContent = label;
+  e.style.background  = active ? T.p : "#fff";
+  e.style.color       = active ? "#fff" : "#6b7280";
+  e.style.border      = "1px solid "+(active ? T.p : "#e5e7eb");
+  e.style.borderRadius= "20px";
+  e.style.padding     = "5px 12px";
+  e.style.fontSize    = "12px";
+  e.style.fontWeight  = active ? "600" : "400";
+  e.style.cursor      = "pointer";
+  e.style.whiteSpace  = "nowrap";
+  if(cb) e.addEventListener("click", cb);
+  return e;
+}
+
+/* ═══════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════ */
+function modal(contentNode){
+  var overlay = div({position:"fixed",inset:"0",background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"flex-end",zIndex:"200"});
+  var box     = div({background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",width:"100%",maxWidth:"400px",margin:"0 auto",maxHeight:"88vh",overflowY:"auto"});
+  overlay.addEventListener("click", function(){ overlay.remove(); });
+  box.addEventListener("click", function(e){ e.stopPropagation(); });
+  box.appendChild(contentNode);
   overlay.appendChild(box);
   document.getElementById("app").appendChild(overlay);
   return overlay;
 }
 
-function xpArc(xpToday,goal){
-  const t=T(), pct=Math.min(100,Math.round((xpToday/goal)*100));
-  const r=54,cx=70,cy=70, circ=Math.PI*r, dash=circ*(pct/100);
-  const ns="http://www.w3.org/2000/svg";
-  const svg=document.createElementNS(ns,"svg");
+/* ═══════════════════════════════════════════════
+   XP ARC  (SVG half-circle gauge)
+═══════════════════════════════════════════════ */
+function xpArc(xpToday, goal, T){
+  var pct  = Math.min(100, Math.round((xpToday/goal)*100));
+  var r=54, cx=70, cy=70;
+  var circ = Math.PI*r;
+  var dash = circ*(pct/100);
+  var ns   = "http://www.w3.org/2000/svg";
+
+  function svgPath(stroke, dashArr){
+    var p = document.createElementNS(ns,"path");
+    p.setAttribute("d","M "+(cx-r)+" "+cy+" A "+r+" "+r+" 0 0 1 "+(cx+r)+" "+cy);
+    p.setAttribute("fill","none");
+    p.setAttribute("stroke",stroke);
+    p.setAttribute("stroke-width","12");
+    p.setAttribute("stroke-linecap","round");
+    if(dashArr) p.setAttribute("stroke-dasharray",dashArr);
+    return p;
+  }
+  function svgText(x,y,size,weight,fill,text){
+    var t = document.createElementNS(ns,"text");
+    t.setAttribute("x",x); t.setAttribute("y",y);
+    t.setAttribute("text-anchor","middle");
+    t.setAttribute("font-size",size);
+    t.setAttribute("font-weight",weight);
+    t.setAttribute("fill",fill);
+    t.textContent = text;
+    return t;
+  }
+
+  var svg = document.createElementNS(ns,"svg");
   svg.setAttribute("width","140"); svg.setAttribute("height","80"); svg.setAttribute("viewBox","0 0 140 80");
-  const arc=(stroke,sd)=>{ const p=document.createElementNS(ns,"path"); p.setAttribute("d",`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`); p.setAttribute("fill","none"); p.setAttribute("stroke",stroke); p.setAttribute("stroke-width","12"); p.setAttribute("stroke-linecap","round"); if(sd) p.setAttribute("stroke-dasharray",sd); return p; };
-  svg.appendChild(arc("#e5e7eb",null));
-  svg.appendChild(arc(t.p,`${dash} ${circ}`));
-  const txt1=document.createElementNS(ns,"text"); txt1.setAttribute("x",cx); txt1.setAttribute("y",cy-8); txt1.setAttribute("text-anchor","middle"); txt1.setAttribute("font-size","18"); txt1.setAttribute("font-weight","700"); txt1.setAttribute("fill",t.d); txt1.textContent=xpToday; svg.appendChild(txt1);
-  const txt2=document.createElementNS(ns,"text"); txt2.setAttribute("x",cx); txt2.setAttribute("y",cy+8); txt2.setAttribute("text-anchor","middle"); txt2.setAttribute("font-size","11"); txt2.setAttribute("fill","#9ca3af"); txt2.textContent=`/ ${goal} XP`; svg.appendChild(txt2);
+  svg.appendChild(svgPath("#e5e7eb", null));
+  svg.appendChild(svgPath(T.p, dash+" "+circ));
+  svg.appendChild(svgText(cx, cy-8, "18","700", T.d, String(xpToday)));
+  svg.appendChild(svgText(cx, cy+8, "11","400","#9ca3af","/ "+goal+" XP"));
   return svg;
 }
 
-// ─── ONBOARDING ────────────────────────────────────────
-function showOnboarding(onDone){
-  const t=T();
-  const avatars=["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
-  let chosenAvatar="⚔️";
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+var currentTab = "home";
+var qFilter = {groupBy:"statut", cat:"all", diff:"all", sort:"default"};
 
-  // Step 1 overlay
-  const overlay=div({position:"fixed",inset:"0",background:t.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",zIndex:"500"});
-
-  const logo=el("div",{style:{fontWeight:"800",fontSize:"32px",color:t.d,letterSpacing:"-1px",marginBottom:"8px"}},["⚔️ SideQuest"]);
-  const sub=el("div",{style:{fontSize:"15px",color:"#6b7280",marginBottom:"36px",textAlign:"center"}},["Transforme ta vie en aventure."]);
-
-  const nameLabel=el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start"}},["Comment tu t'appelles ?"]);
-  const nameInp=el("input",{placeholder:"Ton pseudo...",style:{width:"100%",border:"2px solid "+t.b,borderRadius:"12px",padding:"12px 16px",fontSize:"16px",marginBottom:"24px",boxSizing:"border-box",outline:"none"}});
-  nameInp.addEventListener("focus",()=>nameInp.style.borderColor=t.p);
-  nameInp.addEventListener("blur", ()=>nameInp.style.borderColor=t.b);
-
-  const avatarLabel=el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start"}},["Choisis ton avatar"]);
-
-  const avatarBtns=[];
-  function refreshAv(){
-    avatarBtns.forEach((b,i)=>{
-      b.style.background=avatars[i]===chosenAvatar?t.l:"#fff";
-      b.style.border="2px solid "+(avatars[i]===chosenAvatar?t.p:"#e5e7eb");
-      b.style.transform=avatars[i]===chosenAvatar?"scale(1.12)":"scale(1)";
-    });
-  }
-  const avatarGrid=div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"10px",marginBottom:"32px",width:"100%"},
-    avatars.map(a=>{
-      const b=div({background:a===chosenAvatar?t.l:"#fff",border:"2px solid "+(a===chosenAvatar?t.p:"#e5e7eb"),borderRadius:"14px",padding:"12px",textAlign:"center",fontSize:"28px",cursor:"pointer",transition:"all 0.15s"},[a]);
-      b.addEventListener("click",()=>{ chosenAvatar=a; refreshAv(); });
-      avatarBtns.push(b);
-      return b;
-    })
-  );
-
-  const startBtn=btn("Commencer l'aventure →",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"14px",padding:"14px",fontWeight:"700",fontSize:"16px",cursor:"pointer"},()=>{
-    const name=nameInp.value.trim();
-    if(!name){ nameInp.style.borderColor="#ef4444"; nameInp.focus(); return; }
-    S.playerName=name;
-    S.playerAvatar=chosenAvatar;
+/* ═══════════════════════════════════════════════
+   ADD XP  (handles level-up)
+═══════════════════════════════════════════════ */
+function addXp(amount){
+  S.xp      += amount;
+  S.xpToday += amount;
+  var needed = xpFor(S.level);
+  if(S.xp >= needed){
+    S.xp -= needed;
+    S.level++;
     save();
-    overlay.remove();
-    onDone();
-  });
-
-  overlay.append(logo,sub,nameLabel,nameInp,avatarLabel,avatarGrid,startBtn);
-  document.getElementById("app").appendChild(overlay);
+    showToast("✨ Niveau "+S.level+" atteint !");
+  } else {
+    save();
+  }
 }
 
+function showToast(msg){
+  var T = THEMES[S.themeKey];
+  var t = div({position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",background:T.p,color:"#fff",padding:"12px 28px",borderRadius:"99px",fontWeight:"700",fontSize:"15px",zIndex:"300",boxShadow:"0 4px 20px rgba(0,0,0,0.15)",whiteSpace:"nowrap"},[msg]);
+  document.getElementById("app").appendChild(t);
+  setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 2500);
+}
 
-let currentTab = "home";
-
-// ─── RENDER ENGINE ─────────────────────────────────────
+/* ═══════════════════════════════════════════════
+   MAIN RENDER
+═══════════════════════════════════════════════ */
 function render(){
-  const t=T();
-  const app=document.getElementById("app");
+  var T       = THEMES[S.themeKey];
+  var app     = document.getElementById("app");
+  var xpNeeded= xpFor(S.level);
+  var xpPct   = Math.min(100, Math.round((S.xp/xpNeeded)*100));
 
-  // preserve modals
-  const modals=[...app.children].filter(c=>c.style.zIndex==="200");
-  app.innerHTML="";
-  modals.forEach(m=>app.appendChild(m));
-
-  // ── LEVEL UP TOAST ──
-  // (shown via separate call)
+  // Remove everything except modals and toasts (z-index >= 200)
+  var keep = [];
+  for(var i=0;i<app.childNodes.length;i++){
+    var c = app.childNodes[i];
+    if(c.nodeType===1){
+      var z = parseInt(c.style.zIndex||"0",10);
+      if(z>=200) keep.push(c);
+    }
+  }
+  app.innerHTML = "";
+  keep.forEach(function(c){ app.appendChild(c); });
 
   // ── HEADER ──
-  const xpNeeded=xpFor(S.level), xpPct=Math.min(100,Math.round((S.xp/xpNeeded)*100));
-  const hdr=div({background:"#fff",borderBottom:`1.5px solid ${t.b}`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"},[
+  var hdr = div({background:"#fff",borderBottom:"1.5px solid "+T.b,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"},[
     div({},[
-      el("div",{style:{fontWeight:"700",fontSize:"20px",color:t.d,letterSpacing:"-0.5px"}},[" SideQuest"]),
-      el("div",{style:{fontSize:"11px",color:"#9ca3af"}},["Ton aventure commence ici"]),
+      el("div",{style:{fontWeight:"700",fontSize:"20px",color:T.d,letterSpacing:"-0.5px"}},["SideQuest"]),
+      el("div",{style:{fontSize:"11px",color:"#9ca3af"}},["Ton aventure commence ici"])
     ]),
     div({display:"flex",alignItems:"center",gap:"8px"},[
-      btn("🎨",{background:t.l,border:`1px solid ${t.b}`,borderRadius:"20px",padding:"4px 10px",fontSize:"11px",fontWeight:"600",color:t.d},()=>openThemes()),
+      btn("🎨",{background:T.l,border:"1px solid "+T.b,borderRadius:"20px",padding:"4px 10px",fontSize:"11px",fontWeight:"600",color:T.d}, function(){ openThemes(); }),
       div({textAlign:"right"},[
-        el("div",{style:{fontWeight:"600",fontSize:"13px",color:t.d}},[`Niv. ${S.level} · ${lvlName(S.level)}`]),
-        el("div",{style:{fontSize:"11px",color:"#9ca3af"}},[`${S.xp}/${xpNeeded} XP`]),
-      ]),
-    ]),
+        el("div",{style:{fontWeight:"600",fontSize:"13px",color:T.d}},["Niv. "+S.level+" · "+lvlName(S.level)]),
+        el("div",{style:{fontSize:"11px",color:"#9ca3af"}},[S.xp+"/"+xpNeeded+" XP"])
+      ])
+    ])
   ]);
-  const xpBar=div({background:"#e5e7eb",height:"5px"},[div({background:t.p,width:`${xpPct}%`,height:"5px",transition:"width 0.5s"})]);
+
+  // ── XP BAR ──
+  var xpBar = div({background:"#e5e7eb",height:"5px"},[
+    div({background:T.p,width:xpPct+"%",height:"5px",transition:"width 0.5s"})
+  ]);
 
   // ── CONTENT ──
-  let content;
-  if(currentTab==="home")    content=renderHome();
-  else   if(currentTab==="quests")  content=renderQuests();
-  else if(currentTab==="folders") content=renderFolders();
-  else if(currentTab==="journal") content=renderJournal();
-  else if(currentTab==="profil")  content=renderProfil();
+  var content;
+  if     (currentTab==="home")    content = renderHome(T);
+  else if(currentTab==="quests")  content = renderQuests(T);
+  else if(currentTab==="folders") content = renderFolders(T);
+  else if(currentTab==="guild")   content = renderGuild(T);
+  else if(currentTab==="journal") content = renderJournal(T);
+  else if(currentTab==="profil")  content = renderProfil(T);
+  else                            content = renderHome(T);
 
-  const wrap=div({padding:"16px 16px 80px",overflowY:"auto",maxHeight:"calc(100vh - 80px)"},[content]);
+  var wrap = div({padding:"16px 16px 80px",overflowY:"auto",maxHeight:"calc(100vh - 74px)"});
+  wrap.appendChild(content);
+
+  // ── CONTAINER ──
+  var container = div({maxWidth:"400px",margin:"0 auto",minHeight:"100vh",background:T.bg});
+  container.appendChild(hdr);
+  container.appendChild(xpBar);
+  container.appendChild(wrap);
 
   // ── NAV ──
-  const navItems=[
+  var navItems = [
     {id:"home",   icon:"🏠",label:"Accueil"},
     {id:"quests", icon:"⚔️",label:"Quêtes"},
     {id:"folders",icon:"📁",label:"Dossiers"},
+    {id:"guild",  icon:"🏰",label:"Guilde"},
     {id:"journal",icon:"📖",label:"Journal"},
-    {id:"profil", icon:"👤",label:"Profil"},
+    {id:"profil", icon:"👤",label:"Profil"}
   ];
-  const nav=div({position:"fixed",bottom:"0",left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"400px",background:"#fff",borderTop:"1px solid #e5e7eb",display:"grid",gridTemplateColumns:`repeat(${navItems.length},1fr)`,padding:"6px 0 8px",zIndex:"100"},
-    navItems.map(n=>{
-      const active=currentTab===n.id;
-      const b=div({display:"flex",flexDirection:"column",alignItems:"center",gap:"1px",padding:"3px 0",cursor:"pointer"},[
-        el("span",{style:{fontSize:"17px"}},[n.icon]),
-        el("span",{style:{fontSize:"9px",fontWeight:active?"700":"400",color:active?t.d:"#9ca3af"}},[n.label]),
-        active?div({width:"3px",height:"3px",borderRadius:"50%",background:t.p}):null,
-      ]);
-      b.addEventListener("click",()=>{ currentTab=n.id; render(); });
-      return b;
-    })
-  );
+  var nav = div({position:"fixed",bottom:"0",left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"400px",background:"#fff",borderTop:"1px solid #e5e7eb",display:"grid",gridTemplateColumns:"repeat(6,1fr)",padding:"6px 0 8px",zIndex:"100"});
+  navItems.forEach(function(n){
+    var active = (currentTab===n.id);
+    var dot    = active ? div({width:"3px",height:"3px",borderRadius:"50%",background:T.p,marginTop:"1px"}) : null;
+    var item   = div({display:"flex",flexDirection:"column",alignItems:"center",gap:"1px",padding:"3px 0",cursor:"pointer"},[
+      el("span",{style:{fontSize:"17px"}},[n.icon]),
+      el("span",{style:{fontSize:"9px",fontWeight:active?"700":"400",color:active?T.d:"#9ca3af"}},[n.label]),
+      dot
+    ]);
+    (function(id){ item.addEventListener("click",function(){ currentTab=id; render(); }); })(n.id);
+    nav.appendChild(item);
+  });
 
-  const container=div({maxWidth:"400px",margin:"0 auto",minHeight:"100vh",background:t.bg},[hdr,xpBar,wrap]);
-  app.insertBefore(container,app.firstChild);
+  app.insertBefore(container, app.firstChild);
   app.appendChild(nav);
 }
 
-// ─── HOME ──────────────────────────────────────────────
-function renderHome(){
-  const t=T();
-  const active=S.quests.filter(q=>q.status==="active");
-  const dailyPct=Math.min(100,Math.round((S.xpToday/S.dailyGoal)*100));
+/* ═══════════════════════════════════════════════
+   HOME
+═══════════════════════════════════════════════ */
+function renderHome(T){
+  var dailyPct = Math.min(100,Math.round((S.xpToday/S.dailyGoal)*100));
+  var active   = S.quests.filter(function(q){ return q.status==="active"; });
 
-  const stats=div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"14px"},
-    [{label:"XP total",val:S.xp+S.level*xpFor(S.level)},{label:"Quêtes",val:S.quests.filter(q=>q.status==="done").length},{label:"Streak",val:`${S.streak}j`}].map(s=>
-      div({background:"#fff",border:`1px solid ${t.b}`,borderRadius:"12px",padding:"12px 10px",textAlign:"center"},[
-        el("div",{style:{fontSize:"18px",fontWeight:"700",color:t.d}},[String(s.val)]),
-        el("div",{style:{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}},[s.label]),
-      ])
-    )
-  );
+  var statsItems = [
+    {label:"XP total",  val: S.xp + S.level*xpFor(S.level)},
+    {label:"Quêtes",    val: S.quests.filter(function(q){ return q.status==="done"; }).length},
+    {label:"Streak",    val: S.streak+"j"}
+  ];
+  var statsRow = div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"14px"});
+  statsItems.forEach(function(s){
+    statsRow.appendChild(div({background:"#fff",border:"1px solid "+T.b,borderRadius:"12px",padding:"12px 10px",textAlign:"center"},[
+      el("div",{style:{fontSize:"18px",fontWeight:"700",color:T.d}},[String(s.val)]),
+      el("div",{style:{fontSize:"11px",color:"#9ca3af",marginTop:"2px"}},[s.label])
+    ]));
+  });
 
-  const arcWrap=div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"},[
-    xpArc(S.xpToday,S.dailyGoal),
-    div({},[
-      el("div",{style:{fontWeight:"700",fontSize:"14px",color:t.d,marginBottom:"4px"}},["Objectif du jour"]),
-      el("div",{style:{fontSize:"12px",color:"#6b7280",lineHeight:"1.5"}},["Atteins ton objectif quotidien."]),
-      dailyPct>=100?el("div",{style:{marginTop:"6px",fontSize:"13px",fontWeight:"600",color:t.p}},["🎉 Objectif atteint !"]):null,
-    ]),
+  var arcWrap = div({background:"#fff",border:"1.5px solid "+T.b,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"});
+  arcWrap.appendChild(xpArc(S.xpToday, S.dailyGoal, T));
+  var arcText = div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"14px",color:T.d,marginBottom:"4px"}},["Objectif du jour"]),
+    el("div",{style:{fontSize:"12px",color:"#6b7280",lineHeight:"1.5"}},["Atteins ton objectif quotidien."])
+  ]);
+  if(dailyPct>=100) arcText.appendChild(el("div",{style:{marginTop:"6px",fontSize:"13px",fontWeight:"600",color:T.p}},["🎉 Objectif atteint !"]));
+  arcWrap.appendChild(arcText);
+
+  var expressBox = div({background:T.l,border:"1.5px solid "+T.b,borderRadius:"14px",padding:"14px",marginBottom:"14px"},[
+    el("div",{style:{fontWeight:"700",fontSize:"14px",color:T.d,marginBottom:"3px"}},["⚡ Quête Express"]),
+    el("div",{style:{fontSize:"12px",color:T.d,opacity:"0.7",marginBottom:"10px"}},["Anti-procrastination — 15 min max"]),
+    btn("Lancer →",{background:T.p,color:"#fff",border:"none",borderRadius:"10px",padding:"9px",fontWeight:"600",fontSize:"13px",width:"100%"}, function(){ openExpress(T); })
   ]);
 
-  const express=div({background:t.l,border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"14px",marginBottom:"14px"},[
-    el("div",{style:{fontWeight:"700",fontSize:"14px",color:t.d,marginBottom:"3px"}},["⚡ Quête Express"]),
-    el("div",{style:{fontSize:"12px",color:t.d,opacity:"0.7",marginBottom:"10px"}},["Anti-procrastination — 15 min max"]),
-    btn("Lancer →",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"9px",fontWeight:"600",fontSize:"13px",width:"100%"},()=>openExpress()),
-  ]);
+  var wrapper = div({});
+  wrapper.appendChild(statsRow);
+  wrapper.appendChild(arcWrap);
+  wrapper.appendChild(expressBox);
 
-  const questsSection=div({},[
-    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["En cours"]),
-    ...active.slice(0,3).map(q=>questCard(q,true)),
-    active.length===0?el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"13px",padding:"20px 0"}},["Aucune quête active. Lance-toi !"]):null,
-  ]);
+  var sectionTitle = el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["En cours"]);
+  wrapper.appendChild(sectionTitle);
 
-  return div({},[stats,arcWrap,express,questsSection]);
+  if(active.length===0){
+    wrapper.appendChild(el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"13px",padding:"20px 0"}},["Aucune quête active. Lance-toi !"]));
+  } else {
+    active.slice(0,3).forEach(function(q){
+      wrapper.appendChild(questCard(q, T, true));
+    });
+  }
+  return wrapper;
 }
 
-// ─── QUEST CARD ────────────────────────────────────────
-function questCard(q, slim=false){
-  const t=T();
-  const cat=catMap[q.cat]||{icon:"✨"};
-  const diff=diffMap[q.diff]||DIFFS[0];
-  const isDone=q.status==="done", isWaiting=q.status==="waiting";
-  const progress=q.subs.length>0?Math.round((q.subsChecked.filter(Boolean).length/q.subs.length)*100):0;
+/* ═══════════════════════════════════════════════
+   QUEST CARD
+═══════════════════════════════════════════════ */
+function questCard(q, T, slim){
+  var cat    = catMap[q.cat]  || {icon:"✨",label:"Autre"};
+  var diff   = diffMap[q.diff]|| DIFFS[0];
+  var isDone    = q.status==="done";
+  var isWaiting = q.status==="waiting";
 
-  const tags=div({display:"flex",gap:"4px",flexWrap:"wrap",justifyContent:"flex-end",flexShrink:"0"},[
-    isWaiting?el("span",{style:{background:"#f3f4f6",borderRadius:"8px",padding:"3px 7px",fontSize:"11px",color:"#6b7280",fontWeight:"600"}},["⏳"]):null,
-    el("span",{style:{fontSize:"11px",fontWeight:"600",color:diff.color,background:diff.color+"18",borderRadius:"8px",padding:"3px 7px"}},[diff.label]),
-    el("span",{style:{fontSize:"11px",fontWeight:"600",color:t.d,background:t.l,borderRadius:"8px",padding:"3px 7px"}},[`${q.xp} XP`]),
-  ]);
+  // Tags row
+  var tags = div({display:"flex",gap:"4px",flexWrap:"wrap",justifyContent:"flex-end",flexShrink:"0"});
+  if(isWaiting) tags.appendChild(el("span",{style:{background:"#f3f4f6",borderRadius:"8px",padding:"3px 7px",fontSize:"11px",color:"#6b7280",fontWeight:"600"}},["⏳"]));
+  tags.appendChild(el("span",{style:{fontSize:"11px",fontWeight:"600",color:diff.color,background:diff.color+"18",borderRadius:"8px",padding:"3px 7px"}},[diff.label]));
+  tags.appendChild(el("span",{style:{fontSize:"11px",fontWeight:"600",color:T.d,background:T.l,borderRadius:"8px",padding:"3px 7px"}},[q.xp+" XP"]));
 
-  const titleRow=div({display:"flex",justifyContent:"space-between",alignItems:"flex-start"},[
-    div({flex:"1",paddingRight:"8px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:isDone?"#6b7280":"#111827",textDecoration:isDone?"line-through":"none"}},[`${cat.icon} ${q.title}`]),
-      q.desc?el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"2px"}},[q.desc]):null,
-    ]),
-    tags,
-  ]);
+  var titleText = el("div",{style:{fontWeight:"600",fontSize:"14px",color:isDone?"#6b7280":"#111827",textDecoration:isDone?"line-through":"none"}},[cat.icon+" "+q.title]);
+  var titleCol  = div({flex:"1",paddingRight:"8px"},[titleText]);
+  if(q.desc) titleCol.appendChild(el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"2px"}},[q.desc]));
 
-  // — Chiffered progress goal —
-  let goalEl=null;
-  if(q.goalTarget>0 && !isDone){
-    const prog=q.goalProgress||0;
-    const pct=Math.min(100,Math.round((prog/q.goalTarget)*100));
-    const addInp=el("input",{type:"number",min:"0",placeholder:"+ "+q.goalUnit,style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
-    const addBtn=btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 12px",fontWeight:"600"},()=>{
-      const val=parseFloat(addInp.value); if(!val||val<=0) return;
-      q.goalProgress=Math.min(q.goalTarget,(q.goalProgress||0)+val);
-      if(q.goalProgress>=q.goalTarget && q.status==="active"){
-        // auto-suggest completion
-      }
+  var titleRow = div({display:"flex",justifyContent:"space-between",alignItems:"flex-start"},[titleCol, tags]);
+
+  var card = div({background:isDone?"#f9fafb":"#fff",border:"1px solid "+(isDone?"#e5e7eb":T.b),borderRadius:"14px",padding:"14px",marginBottom:"10px",opacity:isDone?"0.8":"1"});
+  card.appendChild(titleRow);
+
+  // ── Goal progress ──
+  if(q.goalTarget && q.goalTarget>0 && !isDone){
+    var prog = q.goalProgress||0;
+    var pct  = Math.min(100, Math.round((prog/q.goalTarget)*100));
+    var goalWrap = div({marginTop:"10px",background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px"});
+    goalWrap.appendChild(div({display:"flex",justifyContent:"space-between",marginBottom:"4px"},[
+      el("span",{style:{fontSize:"12px",fontWeight:"600",color:"#374151"}},[prog+" / "+q.goalTarget+" "+q.goalUnit]),
+      el("span",{style:{fontSize:"12px",fontWeight:"700",color:pct>=100?T.p:"#6b7280"}},[pct+"% "+(pct>=100?"✓":"")])
+    ]));
+    goalWrap.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"8px"}),[
+      div({background:T.p,width:pct+"%",height:"6px",borderRadius:"4px",transition:"width 0.3s"})
+    ]);
+    var addInp = el("input",{type:"number",min:"0",placeholder:"+ "+q.goalUnit,style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
+    var addBtn = btn("+",{background:T.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 12px",fontWeight:"600",minWidth:"36px"}, function(){
+      var val = parseFloat(addInp.value);
+      if(!val || val<=0) return;
+      q.goalProgress = Math.min(q.goalTarget, (q.goalProgress||0)+val);
+      addInp.value="";
       save(); render();
     });
-    goalEl=div({marginTop:"10px",background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px"},[
-      div({display:"flex",justifyContent:"space-between",marginBottom:"4px"},[
-        el("span",{style:{fontSize:"12px",fontWeight:"600",color:"#374151"}},[prog+" / "+q.goalTarget+" "+q.goalUnit]),
-        el("span",{style:{fontSize:"12px",fontWeight:"700",color:pct>=100?t.p:"#6b7280"}},[pct+"%"+(pct>=100?" ✓":"")]),
-      ]),
-      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"8px"},[
-        div({background:pct>=100?t.p:t.p,width:pct+"%",height:"6px",borderRadius:"4px",transition:"width 0.3s"}),
-      ]),
-      div({display:"flex",gap:"6px"},[addInp,addBtn]),
+    var addRow = div({display:"flex",gap:"6px"});
+    addRow.appendChild(addInp);
+    addRow.appendChild(addBtn);
+    goalWrap.appendChild(addRow);
+    card.appendChild(goalWrap);
+  }
+
+  // ── Sub-objectives ──
+  if(!isDone && q.subs && q.subs.length>0){
+    var progress = Math.round((q.subsChecked.filter(Boolean).length/q.subs.length)*100);
+    var subsWrap = div({marginTop:"8px"});
+    subsWrap.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"4px",marginBottom:"6px"}),[
+      div({background:T.p,width:progress+"%",height:"4px",borderRadius:"4px"})
     ]);
-  }
-  if(!isDone&&q.subs.length>0){
-    const bar=div({background:"#e5e7eb",borderRadius:"4px",height:"4px",marginBottom:"6px"},[div({background:t.p,width:`${progress}%`,height:"4px",borderRadius:"4px"})]);
-    const items=q.subs.map((s,i)=>{
-      const check=div({width:"15px",height:"15px",borderRadius:"4px",border:`2px solid ${q.subsChecked[i]?t.p:"#d1d5db"}`,background:q.subsChecked[i]?t.p:"#fff",flexShrink:"0",display:"flex",alignItems:"center",justifyContent:"center"},[
-        q.subsChecked[i]?el("span",{style:{color:"#fff",fontSize:"9px"}},["✓"]):null
+    q.subs.forEach(function(s,i){
+      var chk = div({width:"15px",height:"15px",borderRadius:"4px",border:"2px solid "+(q.subsChecked[i]?T.p:"#d1d5db"),background:q.subsChecked[i]?T.p:"#fff",flexShrink:"0",display:"flex",alignItems:"center",justifyContent:"center"});
+      if(q.subsChecked[i]) chk.appendChild(el("span",{style:{color:"#fff",fontSize:"9px"}},["✓"]));
+      var row = div({display:"flex",alignItems:"center",gap:"8px",padding:"3px 0",cursor:"pointer"},[
+        chk,
+        el("span",{style:{fontSize:"13px",color:q.subsChecked[i]?"#9ca3af":"#374151",textDecoration:q.subsChecked[i]?"line-through":"none"}},[s])
       ]);
-      const row=div({display:"flex",alignItems:"center",gap:"8px",padding:"3px 0",cursor:"pointer"},[
-        check,el("span",{style:{fontSize:"13px",color:q.subsChecked[i]?"#9ca3af":"#374151",textDecoration:q.subsChecked[i]?"line-through":"none"}},[s])
-      ]);
-      row.addEventListener("click",()=>{
-        q.subsChecked[i]=!q.subsChecked[i]; save(); render();
-      });
-      return row;
+      (function(idx){
+        row.addEventListener("click",function(){
+          q.subsChecked[idx]=!q.subsChecked[idx];
+          save(); render();
+        });
+      })(i);
+      subsWrap.appendChild(row);
     });
-    subsEl=div({marginTop:"8px"},[bar,...items]);
+    card.appendChild(subsWrap);
   }
 
-  const btns=[];
+  // ── Action buttons ──
+  var btnsRow = div({display:"flex",gap:"8px",marginTop:"12px",flexWrap:"wrap"});
+  if(!isDone && q.status==="active"){
+    btnsRow.appendChild(btn("✓ Terminer",{background:T.l,color:T.d,border:"1px solid "+T.b,borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"}, function(){ completeQuest(q.id); }));
+  }
+  if(!isDone && q.status==="waiting"){
+    btnsRow.appendChild(btn("▶ Démarrer",{background:T.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"}, function(){ q.status="active"; save(); render(); }));
+  }
+  if(isDone){
+    btnsRow.appendChild(btn("↩ Annuler",{background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",borderRadius:"8px",padding:"6px 12px",fontSize:"12px"}, function(){ undoneQuest(q.id); }));
+  }
   if(!slim){
-    if(!isDone&&q.status==="active")  btns.push(btn("✓ Terminer",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>completeQuest(q.id)));
-    if(!isDone&&q.status==="waiting") btns.push(btn("▶ Démarrer",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>{ q.status="active"; save(); render(); }));
-    if(isDone) btns.push(btn("↩ Annuler",{background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",borderRadius:"8px",padding:"6px 12px",fontSize:"12px"},()=>undoneQuest(q.id)));
-    btns.push(btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>openEditQuest(q)));
-    btns.push(btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>{ S.quests=S.quests.filter(x=>x.id!==q.id); save(); render(); }));
-  } else {
-    if(!isDone&&q.status==="active")  btns.push(btn("✓ Terminer",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>completeQuest(q.id)));
-    if(!isDone&&q.status==="waiting") btns.push(btn("▶ Démarrer",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontSize:"13px",fontWeight:"600"},()=>{ q.status="active"; save(); render(); }));
+    btnsRow.appendChild(btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"}, function(){ openEditQuest(q); }));
+    btnsRow.appendChild(btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"}, function(){
+      S.quests = S.quests.filter(function(x){ return x.id!==q.id; });
+      save(); render();
+    }));
   }
+  if(btnsRow.children.length>0) card.appendChild(btnsRow);
 
-  return div({background:isDone?"#f9fafb":"#fff",border:`1px solid ${isDone?"#e5e7eb":t.b}`,borderRadius:"14px",padding:"14px",marginBottom:"10px",opacity:isDone?"0.8":"1"},[
-    titleRow, subsEl,
-    btns.length>0?div({display:"flex",gap:"8px",marginTop:"12px",flexWrap:"wrap"},btns):null,
-  ]);
+  return card;
 }
 
 function completeQuest(id){
-  const q=S.quests.find(x=>x.id===id); if(!q||q.status==="done") return;
-  q.status="done";
-  S.xp+=q.xp; S.xpToday+=q.xp;
-  if(S.xp>=xpFor(S.level)){ S.xp-=xpFor(S.level); S.level++; showLevelUp(); }
-  S.log.unshift({date:fmtDate(),text:`Tu as terminé '${q.title}'. +${q.xp} XP.`});
+  var q = S.quests.find(function(x){ return x.id===id; });
+  if(!q || q.status==="done") return;
+  q.status = "done";
+  addXp(q.xp);
+  S.log.unshift({date:fmtDate(), text:"Tu as terminé '"+q.title+"'. +"+q.xp+" XP."});
   save(); render();
 }
+
 function undoneQuest(id){
-  const q=S.quests.find(x=>x.id===id); if(!q||q.status!=="done") return;
-  q.status="active";
-  S.xp=Math.max(0,S.xp-q.xp); S.xpToday=Math.max(0,S.xpToday-q.xp);
-  S.log.unshift({date:fmtDate(),text:`Quête '${q.title}' remise en cours.`});
+  var q = S.quests.find(function(x){ return x.id===id; });
+  if(!q || q.status!=="done") return;
+  q.status = "active";
+  S.xp      = Math.max(0, S.xp-q.xp);
+  S.xpToday = Math.max(0, S.xpToday-q.xp);
+  S.log.unshift({date:fmtDate(), text:"Quête '"+q.title+"' remise en cours."});
   save(); render();
 }
-function showLevelUp(){
-  const t=T();
-  const toast=div({position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",background:t.p,color:"#fff",padding:"12px 28px",borderRadius:"99px",fontWeight:"700",fontSize:"15px",zIndex:"300",boxShadow:"0 4px 20px rgba(0,0,0,0.15)"},[`✨ Niveau ${S.level} atteint !`]);
-  document.getElementById("app").appendChild(toast);
-  setTimeout(()=>toast.remove(),2500);
-}
 
-// ─── QUESTS TAB ────────────────────────────────────────
-let qFilter={groupBy:"statut",cat:"all",diff:"all",sort:"default"};
-function renderQuests(){
-  const t=T();
-  let list=[...S.quests];
-  if(qFilter.cat!=="all")  list=list.filter(q=>q.cat===qFilter.cat);
-  if(qFilter.diff!=="all") list=list.filter(q=>q.diff===qFilter.diff);
-  if(qFilter.sort==="xp_desc")  list.sort((a,b)=>b.xp-a.xp);
-  if(qFilter.sort==="xp_asc")   list.sort((a,b)=>a.xp-b.xp);
-  if(qFilter.sort==="sub_desc") list.sort((a,b)=>b.subs.length-a.subs.length);
-  if(qFilter.sort==="sub_asc")  list.sort((a,b)=>a.subs.length-b.subs.length);
+/* ═══════════════════════════════════════════════
+   QUESTS TAB
+═══════════════════════════════════════════════ */
+function renderQuests(T){
+  var list = S.quests.slice();
+  if(qFilter.cat!=="all")  list = list.filter(function(q){ return q.cat===qFilter.cat; });
+  if(qFilter.diff!=="all") list = list.filter(function(q){ return q.diff===qFilter.diff; });
+  if(qFilter.sort==="xp_desc")  list.sort(function(a,b){ return b.xp-a.xp; });
+  if(qFilter.sort==="xp_asc")   list.sort(function(a,b){ return a.xp-b.xp; });
+  if(qFilter.sort==="sub_desc") list.sort(function(a,b){ return b.subs.length-a.subs.length; });
+  if(qFilter.sort==="sub_asc")  list.sort(function(a,b){ return a.subs.length-b.subs.length; });
 
-  let groups=[];
-  if(qFilter.groupBy==="statut")    groups=[{key:"active",label:"En cours",items:list.filter(q=>q.status==="active")},{key:"waiting",label:"En attente",items:list.filter(q=>q.status==="waiting")},{key:"done",label:"Terminées",items:list.filter(q=>q.status==="done")}];
-  if(qFilter.groupBy==="catégorie") groups=CATS.map(c=>({key:c.id,label:`${c.icon} ${c.label}`,items:list.filter(q=>q.cat===c.id)})).filter(g=>g.items.length>0);
-  if(qFilter.groupBy==="difficulté")groups=DIFFS.map(d=>({key:d.id,label:d.label,color:d.color,items:list.filter(q=>q.diff===d.id)})).filter(g=>g.items.length>0);
-  if(qFilter.groupBy==="dossier")   groups=[...S.folders.map(f=>({key:f.id,label:`${f.icon} ${f.title}`,items:list.filter(q=>q.folderId===f.id)})),{key:"none",label:"📌 Sans dossier",items:list.filter(q=>!q.folderId)}].filter(g=>g.items.length>0);
-
-  const header=div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"},[
-    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Mes Quêtes"]),
-    div({display:"flex",gap:"6px"},[
-      btn("📁",{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"10px",padding:"7px 10px",fontSize:"13px"},()=>openFolderCreate()),
-      btn("+ Créer",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"},()=>openCreateQuest()),
-    ]),
-  ]);
-
-  function filterRow(label,pills){
-    return div({marginBottom:"8px"},[
-      el("div",{style:{fontSize:"11px",fontWeight:"600",color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"5px"}},[label]),
-      div({display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"2px",flexWrap:"wrap"},pills),
-    ]);
+  var groups = [];
+  if(qFilter.groupBy==="statut"){
+    groups = [
+      {key:"active",  label:"En cours",   items:list.filter(function(q){ return q.status==="active"; })},
+      {key:"waiting", label:"En attente", items:list.filter(function(q){ return q.status==="waiting"; })},
+      {key:"done",    label:"Terminées",  items:list.filter(function(q){ return q.status==="done"; })}
+    ];
+  } else if(qFilter.groupBy==="catégorie"){
+    groups = CATS.map(function(c){ return {key:c.id,label:c.icon+" "+c.label,items:list.filter(function(q){ return q.cat===c.id; })}; }).filter(function(g){ return g.items.length>0; });
+  } else if(qFilter.groupBy==="difficulté"){
+    groups = DIFFS.map(function(d){ return {key:d.id,label:d.label,color:d.color,items:list.filter(function(q){ return q.diff===d.id; })}; }).filter(function(g){ return g.items.length>0; });
+  } else if(qFilter.groupBy==="dossier"){
+    groups = S.folders.map(function(f){ return {key:f.id,label:f.icon+" "+f.title,items:list.filter(function(q){ return q.folderId===f.id; })}; });
+    groups.push({key:"none",label:"📌 Sans dossier",items:list.filter(function(q){ return !q.folderId; })});
+    groups = groups.filter(function(g){ return g.items.length>0; });
   }
 
-  const groupPills=[["statut","Statut"],["catégorie","Catégorie"],["difficulté","Difficulté"],["dossier","Dossier"]].map(([v,l])=>pill(qFilter.groupBy===v,l,()=>{ qFilter.groupBy=v; render(); }));
-  const catPills=[pill(qFilter.cat==="all","Tous",()=>{ qFilter.cat="all"; render(); }),...CATS.map(c=>pill(qFilter.cat===c.id,`${c.icon} ${c.label}`,()=>{ qFilter.cat=qFilter.cat===c.id?"all":c.id; render(); }))];
-  const diffPills=[pill(qFilter.diff==="all","Toutes",()=>{ qFilter.diff="all"; render(); }),...DIFFS.map(d=>pill(qFilter.diff===d.id,d.label,()=>{ qFilter.diff=qFilter.diff===d.id?"all":d.id; render(); }))];
-  const sortPills=[["default","Défaut"],["xp_desc","XP ↓"],["xp_asc","XP ↑"],["sub_desc","Long ↓"],["sub_asc","Court ↑"]].map(([v,l])=>pill(qFilter.sort===v,l,()=>{ qFilter.sort=v; render(); }));
+  var wrapper = div({});
 
-  const groupEls=groups.map(g=>{
-    const sep=div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"},[
-      div({height:"1px",flex:"1",background:"#e5e7eb"}),
-      el("span",{style:{fontSize:"12px",fontWeight:"700",color:g.color||t.d,textTransform:"uppercase",letterSpacing:"0.8px",whiteSpace:"nowrap"}},[`${g.label} (${g.items.length})`]),
-      div({height:"1px",flex:"1",background:"#e5e7eb"}),
-    ]);
-    const items=g.items.length===0
-      ?[el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"6px 0"}},["Aucune quête"])]
-      :g.items.map(q=>questCard(q,false));
-    return div({marginBottom:"20px"},[sep,...items]);
+  // Header
+  var header = div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"});
+  header.appendChild(el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Mes Quêtes"]));
+  var hBtns = div({display:"flex",gap:"6px"});
+  hBtns.appendChild(btn("📁",{background:T.l,color:T.d,border:"1px solid "+T.b,borderRadius:"10px",padding:"7px 10px",fontSize:"13px"}, function(){ openFolderCreate(T); }));
+  hBtns.appendChild(btn("+ Créer",{background:T.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"}, function(){ openCreateQuest(T); }));
+  header.appendChild(hBtns);
+  wrapper.appendChild(header);
+
+  // Filter rows
+  function filterRow(label, pills){
+    var row = div({marginBottom:"8px"});
+    row.appendChild(el("div",{style:{fontSize:"11px",fontWeight:"600",color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"5px"}},[label]));
+    var pillsWrap = div({display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"2px",flexWrap:"wrap"});
+    pills.forEach(function(p){ pillsWrap.appendChild(p); });
+    row.appendChild(pillsWrap);
+    return row;
+  }
+
+  var groupPills = [["statut","Statut"],["catégorie","Catégorie"],["difficulté","Difficulté"],["dossier","Dossier"]].map(function(vl){
+    return pill(qFilter.groupBy===vl[0], vl[1], function(){ qFilter.groupBy=vl[0]; render(); }, T);
+  });
+  var catPills = [pill(qFilter.cat==="all","Tous",function(){ qFilter.cat="all"; render(); },T)].concat(
+    CATS.map(function(c){ return pill(qFilter.cat===c.id, c.icon+" "+c.label, function(){ qFilter.cat=(qFilter.cat===c.id?"all":c.id); render(); }, T); })
+  );
+  var diffPills = [pill(qFilter.diff==="all","Toutes",function(){ qFilter.diff="all"; render(); },T)].concat(
+    DIFFS.map(function(d){ return pill(qFilter.diff===d.id, d.label, function(){ qFilter.diff=(qFilter.diff===d.id?"all":d.id); render(); }, T); })
+  );
+  var sortPills = [["default","Défaut"],["xp_desc","XP ↓"],["xp_asc","XP ↑"],["sub_desc","Long ↓"],["sub_asc","Court ↑"]].map(function(vl){
+    return pill(qFilter.sort===vl[0], vl[1], function(){ qFilter.sort=vl[0]; render(); }, T);
   });
 
-  return div({},[header,filterRow("Grouper",groupPills),filterRow("Catégorie",catPills),filterRow("Difficulté",diffPills),filterRow("Trier",sortPills),div({marginBottom:"12px"}),...groupEls]);
-}
+  wrapper.appendChild(filterRow("Grouper",   groupPills));
+  wrapper.appendChild(filterRow("Catégorie", catPills));
+  wrapper.appendChild(filterRow("Difficulté",diffPills));
+  wrapper.appendChild(filterRow("Trier",     sortPills));
+  wrapper.appendChild(div({marginBottom:"12px"}));
 
-// ─── FOLDERS ───────────────────────────────────────────
-let openFolderIds=new Set();
-function renderFolders(){
-  const t=T();
-  const header=div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"},[
-    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Dossiers"]),
-    btn("+ Dossier",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"},()=>openFolderCreate()),
-  ]);
-  if(S.folders.length===0) return div({},[header,el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"40px 0"}},["Aucun dossier. Crées-en un !"])]);
+  if(list.length===0){
+    wrapper.appendChild(el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"40px 0"}},["Aucune quête ne correspond."]));
+  }
 
-  const fEls=S.folders.map(f=>{
-    const fq=S.quests.filter(q=>q.folderId===f.id);
-    const done=fq.filter(q=>q.status==="done").length;
-    const pct=fq.length>0?Math.round((done/fq.length)*100):0;
-    const isOpen=openFolderIds.has(f.id);
-    const summary=div({padding:"16px",cursor:"pointer"},[
-      div({display:"flex",alignItems:"center",gap:"10px"},[
-        el("div",{style:{fontSize:"28px"}},[f.icon]),
-        div({flex:"1"},[
-          el("div",{style:{fontWeight:"700",fontSize:"15px",color:"#111827"}},[f.title]),
-          f.desc?el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"1px"}},[f.desc]):null,
-          el("div",{style:{fontSize:"12px",color:t.d,marginTop:"4px"}},[`${done}/${fq.length} quêtes · ${pct}%`]),
-        ]),
-        el("span",{style:{fontSize:"18px",color:"#9ca3af"}},[isOpen?"▲":"▼"]),
-      ]),
-      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginTop:"10px"},[div({background:t.p,width:`${pct}%`,height:"6px",borderRadius:"4px"})]),
+  groups.forEach(function(g){
+    var sep = div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"},[
+      div({height:"1px",flex:"1",background:"#e5e7eb"}),
+      el("span",{style:{fontSize:"12px",fontWeight:"700",color:g.color||T.d,textTransform:"uppercase",letterSpacing:"0.8px",whiteSpace:"nowrap"}},[g.label+" ("+g.items.length+")"]),
+      div({height:"1px",flex:"1",background:"#e5e7eb"})
     ]);
-    summary.addEventListener("click",()=>{ isOpen?openFolderIds.delete(f.id):openFolderIds.add(f.id); render(); });
-
-    let inner=null;
-    if(isOpen){
-      inner=div({borderTop:"1px solid #f3f4f6",padding:"12px 16px"},[
-        fq.length===0?el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"8px 0"}},["Aucune quête dans ce dossier."]):null,
-        ...fq.map(q=>questCard(q,true)),
-        div({display:"flex",gap:"8px",marginTop:"8px"},[
-          btn("✏️ Modifier",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>openEditFolder(f)),
-          btn("🗑️ Supprimer",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"},()=>{ S.folders=S.folders.filter(x=>x.id!==f.id); openFolderIds.delete(f.id); save(); render(); }),
-        ]),
-      ]);
+    wrapper.appendChild(sep);
+    if(g.items.length===0){
+      wrapper.appendChild(el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"6px 0"}},["Aucune quête"]));
+    } else {
+      g.items.forEach(function(q){ wrapper.appendChild(questCard(q,T,false)); });
     }
-    return div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"16px",marginBottom:"12px",overflow:"hidden"},[summary,inner]);
   });
 
-  return div({},[header,...fEls]);
+  return wrapper;
 }
 
-// ─── GUILD ─────────────────────────────────────────────
-function renderGuild(){
-  const t=T();
-  const hasGuild = S.guildName!=="";
+/* ═══════════════════════════════════════════════
+   FOLDERS TAB
+═══════════════════════════════════════════════ */
+var openFolderIds = {};
 
-  if(!hasGuild){
-    return div({},[
-      el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"16px"}},["⚔️ Ma Guilde"]),
-      div({background:t.l,border:"1.5px solid "+t.b,borderRadius:"14px",padding:"24px 20px",textAlign:"center",marginBottom:"16px"},[
-        el("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🏰"]),
-        el("div",{style:{fontWeight:"700",fontSize:"16px",color:t.d,marginBottom:"8px"}},["Crée ta guilde"]),
-        el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.6",marginBottom:"20px"}},["Donne un nom à ta guilde, ajoute des défis personnels et suis ta progression."]),
-        btn("+ Créer ma guilde",{background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"12px 24px",fontWeight:"700",fontSize:"14px"},()=>openCreateGuild()),
-      ]),
-      div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"},[
-        el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["ℹ️ À propos des guildes"]),
-        el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.7"}},["Les guildes sont sauvegardées sur ton appareil. Tu peux créer une guilde solo pour suivre tes propres défis et objectifs collectifs fictifs."]),
-      ]),
-    ]);
+function renderFolders(T){
+  var wrapper = div({});
+  var header  = div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"});
+  header.appendChild(el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827"}},["Dossiers"]));
+  header.appendChild(btn("+ Dossier",{background:T.p,color:"#fff",border:"none",borderRadius:"10px",padding:"7px 14px",fontSize:"13px",fontWeight:"600"}, function(){ openFolderCreate(T); }));
+  wrapper.appendChild(header);
+
+  if(S.folders.length===0){
+    wrapper.appendChild(el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"40px 0"}},["Aucun dossier. Crées-en un !"]));
+    return wrapper;
   }
 
-  // Guild exists — render it
-  const chalEls = S.guildChallenges.map((ch,ci)=>{
-    const tot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
-    const pct=Math.min(100,Math.round((tot/ch.target)*100));
-    const contribInp=el("input",{type:"number",placeholder:"+ quantité",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
-    return div({background:"#fff",border:"1px solid "+(ch.done?t.b:"#e5e7eb"),borderRadius:"14px",padding:"14px",marginBottom:"10px"},[
-      div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"},[
-        el("div",{style:{fontWeight:"600",fontSize:"14px",flex:"1"}},[ch.title]),
-        div({display:"flex",gap:"6px",alignItems:"center"},[
-          ch.done?el("span",{style:{background:t.l,color:t.d,borderRadius:"8px",padding:"3px 8px",fontSize:"12px",fontWeight:"700"}},["✓ Terminé"]):null,
-          btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"6px",padding:"3px 7px",fontSize:"12px"},()=>{
-            S.guildChallenges.splice(ci,1); save(); render();
-          }),
-        ]),
-      ]),
-      el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"8px"}},[tot+" / "+ch.target+" "+ch.unit]),
-      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"10px"},[
-        div({background:t.p,width:pct+"%",height:"6px",borderRadius:"4px"}),
-      ]),
-      !ch.done?div({display:"flex",gap:"8px"},[
-        contribInp,
-        btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontWeight:"600"},()=>{
-          const val=parseInt(contribInp.value,10); if(!val||val<=0) return;
-          ch.contributions[S.playerName]=(ch.contributions[S.playerName]||0)+val;
-          if(Object.values(ch.contributions).reduce((a,b)=>a+b,0)>=ch.target) ch.done=true;
-          save(); render();
-        }),
-      ]):null,
+  S.folders.forEach(function(f){
+    var fq   = S.quests.filter(function(q){ return q.folderId===f.id; });
+    var done = fq.filter(function(q){ return q.status==="done"; }).length;
+    var pct  = fq.length>0 ? Math.round((done/fq.length)*100) : 0;
+    var isOpen = !!openFolderIds[f.id];
+
+    var card = div({background:"#fff",border:"1.5px solid "+T.b,borderRadius:"16px",marginBottom:"12px",overflow:"hidden"});
+
+    // Summary
+    var summary = div({padding:"16px",cursor:"pointer"});
+    var sumRow  = div({display:"flex",alignItems:"center",gap:"10px"});
+    sumRow.appendChild(el("div",{style:{fontSize:"28px"}},[f.icon]));
+    var sumInfo = div({flex:"1"});
+    sumInfo.appendChild(el("div",{style:{fontWeight:"700",fontSize:"15px",color:"#111827"}},[f.title]));
+    if(f.desc) sumInfo.appendChild(el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"1px"}},[f.desc]));
+    sumInfo.appendChild(el("div",{style:{fontSize:"12px",color:T.d,marginTop:"4px"}},[done+"/"+fq.length+" quêtes · "+pct+"%"]));
+    sumRow.appendChild(sumInfo);
+    sumRow.appendChild(el("span",{style:{fontSize:"18px",color:"#9ca3af"}},[isOpen?"▲":"▼"]));
+    summary.appendChild(sumRow);
+    summary.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginTop:"10px"}),[
+      div({background:T.p,width:pct+"%",height:"6px",borderRadius:"4px"})
     ]);
+    (function(fid){
+      summary.addEventListener("click",function(){ openFolderIds[fid]=!openFolderIds[fid]; render(); });
+    })(f.id);
+    card.appendChild(summary);
+
+    if(isOpen){
+      var inner = div({borderTop:"1px solid #f3f4f6",padding:"12px 16px"});
+      if(fq.length===0){
+        inner.appendChild(el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"8px 0"}},["Aucune quête dans ce dossier."]));
+      } else {
+        fq.forEach(function(q){ inner.appendChild(questCard(q,T,true)); });
+      }
+      var ibtns = div({display:"flex",gap:"8px",marginTop:"8px"});
+      ibtns.appendChild(btn("✏️ Modifier",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"}, function(){ openEditFolder(T,f); }));
+      ibtns.appendChild(btn("🗑️ Supprimer",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",padding:"6px 12px",fontSize:"13px"}, function(){
+        S.folders = S.folders.filter(function(x){ return x.id!==f.id; });
+        delete openFolderIds[f.id];
+        save(); render();
+      }));
+      inner.appendChild(ibtns);
+      card.appendChild(inner);
+    }
+
+    wrapper.appendChild(card);
   });
-
-  const newChalTitle=el("input",{placeholder:"Nom du défi…",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
-  const newChalTarget=el("input",{type:"number",placeholder:"Objectif",style:{width:"80px",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
-  const newChalUnit=el("input",{placeholder:"Unité",style:{width:"80px",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
-
-  return div({},[
-    div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"},[
-      el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},["⚔️ "+S.guildName]),
-      btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"},()=>openCreateGuild(true)),
-    ]),
-    div({background:t.l,border:"1.5px solid "+t.b,borderRadius:"14px",padding:"14px",marginBottom:"16px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:t.d,marginBottom:"4px"}},["📊 Stats"]),
-      el("div",{style:{fontSize:"13px",color:t.d}},[
-        S.quests.filter(q=>q.status==="done").length+" quêtes terminées · Niv. "+S.level+" · "+S.xp+" XP"
-      ]),
-    ]),
-    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["🎯 Défis"]),
-    S.guildChallenges.length===0
-      ? el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"12px 0",marginBottom:"10px"}},["Aucun défi pour l'instant. Ajoutes-en un !"])
-      : null,
-    ...chalEls,
-    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"14px",marginBottom:"14px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#374151",marginBottom:"8px"}},["+ Nouveau défi"]),
-      div({display:"flex",gap:"6px",marginBottom:"6px"},[newChalTitle]),
-      div({display:"flex",gap:"6px"},[
-        newChalTarget, newChalUnit,
-        btn("Ajouter",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"8px 12px",fontWeight:"600",fontSize:"13px"},()=>{
-          if(!newChalTitle.value.trim()) return;
-          S.guildChallenges.push({id:uid(),title:newChalTitle.value.trim(),target:parseInt(newChalTarget.value)||100,unit:newChalUnit.value.trim()||"points",contributions:{},done:false});
-          save(); render();
-        }),
-      ]),
-    ]),
-    btn("🗑️ Dissoudre la guilde",{width:"100%",background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"9px",fontSize:"13px"},()=>{
-      if(confirm("Dissoudre la guilde ? Tous les défis seront perdus.")){ S.guildName=""; S.guildChallenges=[]; save(); render(); }
-    }),
-  ]);
+  return wrapper;
 }
 
-function openCreateGuild(isEdit){
-  const t=T();
-  const nameInp=inp("Nom de la guilde *", isEdit?S.guildName:"", e=>{});
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[isEdit?"Renommer la guilde":"Créer ma guilde"]),
-    nameInp,
-    btn(isEdit?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
-      if(!nameInp.value.trim()) return;
-      S.guildName=nameInp.value.trim();
-      if(!isEdit) S.guildChallenges=[];
-      save(); render(); m.remove();
-    }),
-    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
-}
+/* ═══════════════════════════════════════════════
+   GUILD TAB
+═══════════════════════════════════════════════ */
+function renderGuild(T){
+  var wrapper = div({});
+  wrapper.appendChild(el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"16px"}},["⚔️ Ma Guilde"]));
 
-// ─── JOURNAL ───────────────────────────────────────────
-function renderJournal(){
-  const t=T();
-  const dailyPct=Math.min(100,Math.round((S.xpToday/S.dailyGoal)*100));
-  const arcRow=div({background:"#fff",border:`1.5px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"},[
-    xpArc(S.xpToday,S.dailyGoal),
-    div({},[
-      el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},["Aujourd'hui"]),
-      el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"4px"}},[`${S.xpToday} XP gagnés sur ${S.dailyGoal} XP visés`]),
-      el("div",{style:{fontSize:"12px",color:t.d,marginTop:"4px",fontWeight:"600"}},[`${S.quests.filter(q=>q.status==="done").length} quêtes terminées au total`]),
-    ]),
-  ]);
-  const entries=S.log.length===0
-    ?[el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"30px 0"}},["Lance-toi !"])]
-    :S.log.map(e=>div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"14px",marginBottom:"10px",borderLeft:`3px solid ${t.p}`},[
-        el("div",{style:{fontSize:"11px",color:"#9ca3af",marginBottom:"4px"}},[`📅 ${e.date}`]),
-        el("div",{style:{fontSize:"13px",color:"#374151",lineHeight:"1.5"}},[e.text]),
-      ]));
-  return div({},[
-    el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"14px"}},["Journal d'aventure"]),
-    arcRow,
-    el("div",{style:{background:t.l,border:`1px solid ${t.b}`,borderRadius:"12px",padding:"12px 16px",marginBottom:"14px",fontSize:"13px",color:t.d,fontStyle:"italic"}},["\"Chaque quête accomplie est une page de ton histoire.\""]),
-    ...entries,
-  ]);
-}
+  if(!S.guildName){
+    var emptyBox = div({background:T.l,border:"1.5px solid "+T.b,borderRadius:"14px",padding:"24px 20px",textAlign:"center",marginBottom:"16px"});
+    emptyBox.appendChild(el("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🏰"]));
+    emptyBox.appendChild(el("div",{style:{fontWeight:"700",fontSize:"16px",color:T.d,marginBottom:"8px"}},["Crée ta guilde"]));
+    emptyBox.appendChild(el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.6",marginBottom:"20px"}},["Donne un nom à ta guilde et suis ta progression avec des défis."]));
+    emptyBox.appendChild(btn("+ Créer ma guilde",{background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"12px 24px",fontWeight:"700",fontSize:"14px"}, function(){ openCreateGuild(T,false); }));
+    wrapper.appendChild(emptyBox);
 
-// ─── PROFIL ────────────────────────────────────────────
-function renderProfil(){
-  const t=T();
-  const xpNeeded=xpFor(S.level);
-  const xpPct=Math.min(100,Math.round((S.xp/xpNeeded)*100));
+    var infoBox = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"});
+    infoBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["ℹ️ À propos des guildes"]));
+    infoBox.appendChild(el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.7"}},["Les guildes sont sauvegardées sur ton appareil. Crée une guilde pour suivre tes défis et objectifs."]));
+    wrapper.appendChild(infoBox);
+    return wrapper;
+  }
 
-  // — Skill bars —
-  const skillBars=CATS.map(c=>{
-    const done=S.quests.filter(q=>q.status==="done"&&q.cat===c.id).length;
-    const total=S.quests.filter(q=>q.cat===c.id).length;
-    const pct=total>0?Math.round((done/total)*100):0;
-    return div({marginBottom:"10px"},[
-      div({display:"flex",justifyContent:"space-between",marginBottom:"3px"},[
-        el("span",{style:{fontSize:"13px",color:"#374151"}},[c.icon+" "+c.label]),
-        el("span",{style:{fontSize:"12px",color:t.d,fontWeight:"600"}},[done+"/"+total]),
-      ]),
-      div({background:"#e5e7eb",borderRadius:"4px",height:"5px"},[
-        div({background:t.p,width:pct+"%",height:"5px",borderRadius:"4px"}),
-      ]),
-    ]);
-  });
+  // Guild header
+  var gHeader = div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"});
+  gHeader.appendChild(el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},["⚔️ "+S.guildName]));
+  gHeader.appendChild(btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}, function(){ openCreateGuild(T,true); }));
+  wrapper.appendChild(gHeader);
 
-  // — Theme grid —
-  const themeGrid=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"},
-    Object.entries(THEMES).map(([k,th])=>{
-      const b=div({background:th.l,border:"2px solid "+(S.themeKey===k?th.p:th.b),borderRadius:"12px",padding:"10px",cursor:"pointer",display:"flex",alignItems:"center",gap:"8px"},[
-        div({width:"18px",height:"18px",borderRadius:"50%",background:th.p,flexShrink:"0"}),
-        el("span",{style:{fontSize:"13px",fontWeight:S.themeKey===k?"700":"400",color:th.d}},[th.name]),
-        S.themeKey===k?el("span",{style:{marginLeft:"auto"}},["✓"]):null,
+  // Stats
+  var statsBox = div({background:T.l,border:"1.5px solid "+T.b,borderRadius:"14px",padding:"14px",marginBottom:"16px"});
+  statsBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:T.d,marginBottom:"4px"}},["📊 Stats"]));
+  statsBox.appendChild(el("div",{style:{fontSize:"13px",color:T.d}},[
+    S.quests.filter(function(q){ return q.status==="done"; }).length+" quêtes terminées · Niv. "+S.level+" · "+S.xp+" XP"
+  ]));
+  wrapper.appendChild(statsBox);
+
+  // Challenges
+  wrapper.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["🎯 Défis"]));
+
+  if(S.guildChallenges.length===0){
+    wrapper.appendChild(el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"12px 0",marginBottom:"10px"}},["Aucun défi. Ajoutes-en un !"]));
+  } else {
+    S.guildChallenges.forEach(function(ch, ci){
+      var tot = 0;
+      Object.keys(ch.contributions||{}).forEach(function(k){ tot+=ch.contributions[k]; });
+      var pct = Math.min(100,Math.round((tot/ch.target)*100));
+
+      var chalCard = div({background:"#fff",border:"1px solid "+(ch.done?T.b:"#e5e7eb"),borderRadius:"14px",padding:"14px",marginBottom:"10px"});
+
+      var chalHeader = div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"});
+      chalHeader.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",flex:"1"}},[ch.title]));
+      var chalHBtns = div({display:"flex",gap:"6px",alignItems:"center"});
+      if(ch.done) chalHBtns.appendChild(el("span",{style:{background:T.l,color:T.d,borderRadius:"8px",padding:"3px 8px",fontSize:"12px",fontWeight:"700"}},["✓ Terminé"]));
+      chalHBtns.appendChild(btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"6px",padding:"3px 7px",fontSize:"12px"}, (function(idx){ return function(){
+        S.guildChallenges.splice(idx,1); save(); render();
+      }; })(ci)));
+      chalHeader.appendChild(chalHBtns);
+      chalCard.appendChild(chalHeader);
+
+      chalCard.appendChild(el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"8px"}},[tot+" / "+ch.target+" "+ch.unit]));
+      chalCard.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"10px"}),[
+        div({background:T.p,width:pct+"%",height:"6px",borderRadius:"4px"})
       ]);
-      b.addEventListener("click",()=>{ S.themeKey=k; save(); render(); });
-      return b;
-    })
-  );
 
-  // — Daily goal buttons —
-  const goalBtns=div({display:"flex",gap:"8px",marginBottom:"8px"},
-    [100,200,300,500].map(v=>{
-      const b=btn(String(v),{flex:"1",background:S.dailyGoal===v?t.p:"#f3f4f6",color:S.dailyGoal===v?"#fff":"#374151",border:"1px solid "+(S.dailyGoal===v?t.p:"#e5e7eb"),borderRadius:"8px",padding:"7px 0",fontSize:"13px",fontWeight:S.dailyGoal===v?"700":"400"},()=>{ S.dailyGoal=v; save(); render(); });
-      return b;
-    })
-  );
-  const customGoalInp=el("input",{type:"number",placeholder:"Objectif perso",min:"10",max:"9999",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"7px 10px",fontSize:"13px"}});
-  customGoalInp.addEventListener("keydown",e=>{ if(e.key==="Enter"&&parseInt(customGoalInp.value)>0){ S.dailyGoal=parseInt(customGoalInp.value,10); save(); render(); }});
-
-  return div({},[
-    // — Card profil —
-    div({background:"#fff",border:"1.5px solid "+t.b,borderRadius:"16px",padding:"20px",marginBottom:"14px",textAlign:"center"},[
-      div({width:"72px",height:"72px",borderRadius:"50%",background:t.l,border:"3px solid "+t.p,margin:"0 auto",marginBottom:"12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px"},[S.playerAvatar||"⚔️"]),
-      el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},[S.playerName||"Joueur"]),
-      el("div",{style:{fontSize:"13px",color:t.d,fontWeight:"600",marginTop:"4px"}},["Niv. "+S.level+" — "+lvlName(S.level)]),
-      el("div",{style:{display:"inline-block",marginTop:"8px",background:t.l,color:t.d,border:"1px solid "+t.b,borderRadius:"20px",padding:"4px 14px",fontSize:"12px",fontWeight:"600"}},["🏷️ "+lvlName(S.level)]),
-      div({display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"},[
-        btn("✏️ Modifier le profil",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>openEditProfil()),
-        btn("🔄 Réinitialiser le profil",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>confirmResetProfil()),
-      ]),
-    ]),
-    // — Objectif quotidien —
-    div({background:"#fff",border:"1.5px solid "+t.b,borderRadius:"14px",padding:"16px",marginBottom:"14px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎯 Objectif XP quotidien"]),
-      xpArc(S.xpToday,S.dailyGoal),
-      div({marginTop:"12px"},[
-        el("div",{style:{fontSize:"13px",color:"#374151",marginBottom:"6px"}},["Modifier l'objectif :"]),
-        goalBtns,
-        div({display:"flex",gap:"8px",alignItems:"center"},[customGoalInp,el("span",{style:{fontSize:"12px",color:"#9ca3af"}},["↵ Entrée"])]),
-      ]),
-    ]),
-    // — XP bar —
-    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["Vers niveau "+(S.level+1)+" — "+xpPct+"%"]),
-      div({background:"#e5e7eb",borderRadius:"6px",height:"8px"},[
-        div({background:t.p,width:xpPct+"%",height:"8px",borderRadius:"6px",transition:"width 0.5s"}),
-      ]),
-    ]),
-    // — Compétences —
-    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["Compétences"]),
-      ...skillBars,
-    ]),
-    // — Thème —
-    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"},[
-      el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎨 Thème"]),
-      themeGrid,
-    ]),
-  ]);
-}
-
-function openEditProfil(){
-  const t=T();
-  const nameInp=inp("Ton pseudo *", S.playerName||"", e=>{});
-  const avatars=["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
-  let chosenAvatar=S.playerAvatar||"⚔️";
-
-  const avatarBtns=[];
-  function refreshAvatarBtns(){
-    avatarBtns.forEach((b,i)=>{
-      const a=avatars[i];
-      b.style.background=a===chosenAvatar?t.l:"#f9fafb";
-      b.style.border="2px solid "+(a===chosenAvatar?t.p:"#e5e7eb");
+      if(!ch.done){
+        var contribInp = el("input",{type:"number",placeholder:"+ "+ch.unit,style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
+        var contribBtn = btn("+",{background:T.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 12px",fontWeight:"600",minWidth:"36px"}, (function(challenge, inp){ return function(){
+          var val=parseInt(inp.value,10); if(!val||val<=0) return;
+          challenge.contributions = challenge.contributions||{};
+          challenge.contributions[S.playerName]=(challenge.contributions[S.playerName]||0)+val;
+          var newTot=0; Object.keys(challenge.contributions).forEach(function(k){ newTot+=challenge.contributions[k]; });
+          if(newTot>=challenge.target) challenge.done=true;
+          inp.value="";
+          save(); render();
+        }; })(ch, contribInp));
+        var contribRow = div({display:"flex",gap:"8px"});
+        contribRow.appendChild(contribInp);
+        contribRow.appendChild(contribBtn);
+        chalCard.appendChild(contribRow);
+      }
+      wrapper.appendChild(chalCard);
     });
   }
 
-  const avatarGrid=div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"14px"},
-    avatars.map(a=>{
-      const b=div({background:chosenAvatar===a?t.l:"#f9fafb",border:"2px solid "+(chosenAvatar===a?t.p:"#e5e7eb"),borderRadius:"12px",padding:"10px",textAlign:"center",fontSize:"24px",cursor:"pointer"},[a]);
-      b.addEventListener("click",()=>{ chosenAvatar=a; refreshAvatarBtns(); });
-      avatarBtns.push(b);
-      return b;
-    })
-  );
+  // Add challenge
+  var newChalBox  = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"14px",marginBottom:"14px"});
+  newChalBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#374151",marginBottom:"8px"}},["+ Nouveau défi"]));
+  var nctInp  = mkInput("Nom du défi…",   "", {marginBottom:"8px"});
+  var nctg    = el("input",{type:"number",placeholder:"Objectif",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"7px 10px",fontSize:"13px"}});
+  var ncUnit  = el("input",{placeholder:"Unité (pages, km…)",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"7px 10px",fontSize:"13px"}});
+  newChalBox.appendChild(nctInp);
+  var ncRow = div({display:"flex",gap:"6px",marginBottom:"8px"});
+  ncRow.appendChild(nctg); ncRow.appendChild(ncUnit);
+  newChalBox.appendChild(ncRow);
+  newChalBox.appendChild(btn("Ajouter le défi",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"8px",padding:"9px",fontWeight:"600",fontSize:"13px"}, function(){
+    if(!nctInp.value.trim()) return;
+    S.guildChallenges.push({id:uid(),title:nctInp.value.trim(),target:parseInt(nctg.value)||100,unit:ncUnit.value.trim()||"points",contributions:{},done:false});
+    save(); render();
+  }));
+  wrapper.appendChild(newChalBox);
 
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["✏️ Modifier le profil"]),
-    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton pseudo"]),
-    nameInp,
-    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton avatar"]),
-    avatarGrid,
-    btn("Enregistrer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
-      if(!nameInp.value.trim()) return;
-      S.playerName=nameInp.value.trim();
-      S.playerAvatar=chosenAvatar;
-      save(); render(); m.remove();
-    }),
-    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+  wrapper.appendChild(btn("🗑️ Dissoudre la guilde",{width:"100%",background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"9px",fontSize:"13px"}, function(){
+    if(confirm("Dissoudre la guilde ? Tous les défis seront perdus.")){
+      S.guildName=""; S.guildChallenges=[]; save(); render();
+    }
+  }));
+
+  return wrapper;
 }
 
-function confirmResetProfil(){
-  const t=T();
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"8px"}},["🔄 Réinitialiser le profil"]),
-    el("div",{style:{fontSize:"14px",color:"#6b7280",marginBottom:"20px",lineHeight:"1.6"}},["Toute ta progression sera effacée (quêtes, XP, niveau, dossiers, journal, guilde). Cette action est irréversible."]),
-    btn("⚠️ Réinitialiser",{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
-      // Full wipe
-      localStorage.removeItem("sq_state");
-      for(const k of Object.keys(S)) delete S[k];
-      Object.assign(S, JSON.parse(JSON.stringify(DEFAULT_STATE)));
-      save(); m.remove();
-      currentTab="home";
-      // Remove any leftover UI then show onboarding
-      document.getElementById("app").innerHTML="";
-      showOnboarding(()=>render());
-    }),
-    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+/* ═══════════════════════════════════════════════
+   JOURNAL TAB
+═══════════════════════════════════════════════ */
+function renderJournal(T){
+  var wrapper = div({});
+  wrapper.appendChild(el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"14px"}},["Journal d'aventure"]));
+
+  var arcRow = div({background:"#fff",border:"1.5px solid "+T.b,borderRadius:"14px",padding:"16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"16px"});
+  arcRow.appendChild(xpArc(S.xpToday, S.dailyGoal, T));
+  var arcInfo = div({});
+  arcInfo.appendChild(el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},["Aujourd'hui"]));
+  arcInfo.appendChild(el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"4px"}},[S.xpToday+" XP gagnés sur "+S.dailyGoal+" XP visés"]));
+  arcInfo.appendChild(el("div",{style:{fontSize:"12px",color:T.d,marginTop:"4px",fontWeight:"600"}},[S.quests.filter(function(q){ return q.status==="done"; }).length+" quêtes terminées au total"]));
+  arcRow.appendChild(arcInfo);
+  wrapper.appendChild(arcRow);
+
+  wrapper.appendChild(el("div",{style:{background:T.l,border:"1px solid "+T.b,borderRadius:"12px",padding:"12px 16px",marginBottom:"14px",fontSize:"13px",color:T.d,fontStyle:"italic"}},["\"Chaque quête accomplie est une page de ton histoire.\""]));
+
+  if(S.log.length===0){
+    wrapper.appendChild(el("div",{style:{textAlign:"center",color:"#6b7280",fontSize:"14px",padding:"30px 0"}},["Lance-toi !"]));
+  } else {
+    S.log.forEach(function(e){
+      var entry = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"14px",marginBottom:"10px",borderLeft:"3px solid "+T.p});
+      entry.appendChild(el("div",{style:{fontSize:"11px",color:"#9ca3af",marginBottom:"4px"}},["📅 "+e.date]));
+      entry.appendChild(el("div",{style:{fontSize:"13px",color:"#374151",lineHeight:"1.5"}},[e.text]));
+      wrapper.appendChild(entry);
+    });
+  }
+  return wrapper;
 }
 
-// ─── MODALS ────────────────────────────────────────────
-function openExpress(){
-  const t=T();
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"4px"}},["⚡ Quête Express"]),
-    el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"14px"}},["15 min max — clique pour valider"]),
-    ...EXPRESS.map(q=>{
-      const r=div({background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"12px 14px",marginBottom:"8px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"},[
-        div({},[
-          el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},[q.title]),
-          el("div",{style:{fontSize:"12px",color:"#6b7280"}},[q.desc]),
-        ]),
-        el("span",{style:{fontSize:"12px",fontWeight:"700",color:t.d,background:t.l,borderRadius:"8px",padding:"4px 8px",marginLeft:"8px"}},[`+${q.xp}`]),
-      ]);
-      r.addEventListener("click",()=>{
-        S.xp+=q.xp; S.xpToday+=q.xp; S.streak++;
-        if(S.xp>=xpFor(S.level)){ S.xp-=xpFor(S.level); S.level++; }
-        S.log.unshift({date:fmtDate(),text:`Mini-quête '${q.title}'. +${q.xp} XP !`});
+/* ═══════════════════════════════════════════════
+   PROFIL TAB
+═══════════════════════════════════════════════ */
+function renderProfil(T){
+  var xpNeeded = xpFor(S.level);
+  var xpPct    = Math.min(100,Math.round((S.xp/xpNeeded)*100));
+  var wrapper  = div({});
+
+  // Profile card
+  var card = div({background:"#fff",border:"1.5px solid "+T.b,borderRadius:"16px",padding:"20px",marginBottom:"14px",textAlign:"center"});
+  var avatar = div({width:"72px",height:"72px",borderRadius:"50%",background:T.l,border:"3px solid "+T.p,margin:"0 auto",marginBottom:"12px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px"},[S.playerAvatar||"⚔️"]);
+  card.appendChild(avatar);
+  card.appendChild(el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},[S.playerName||"Joueur"]));
+  card.appendChild(el("div",{style:{fontSize:"13px",color:T.d,fontWeight:"600",marginTop:"4px"}},["Niv. "+S.level+" — "+lvlName(S.level)]));
+  card.appendChild(el("div",{style:{display:"inline-block",marginTop:"8px",background:T.l,color:T.d,border:"1px solid "+T.b,borderRadius:"20px",padding:"4px 14px",fontSize:"12px",fontWeight:"600"}},["🏷️ "+lvlName(S.level)]));
+  var cardBtns = div({display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"});
+  cardBtns.appendChild(btn("✏️ Modifier",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"}, function(){ openEditProfil(T); }));
+  cardBtns.appendChild(btn("🔄 Réinitialiser",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"}, function(){ confirmResetProfil(T); }));
+  card.appendChild(cardBtns);
+  wrapper.appendChild(card);
+
+  // Daily goal
+  var goalBox = div({background:"#fff",border:"1.5px solid "+T.b,borderRadius:"14px",padding:"16px",marginBottom:"14px"});
+  goalBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎯 Objectif XP quotidien"]));
+  goalBox.appendChild(xpArc(S.xpToday, S.dailyGoal, T));
+  var goalBtnsRow = div({display:"flex",gap:"8px",marginTop:"12px",marginBottom:"8px"});
+  [100,200,300,500].forEach(function(v){
+    goalBtnsRow.appendChild(btn(String(v),{flex:"1",background:S.dailyGoal===v?T.p:"#f3f4f6",color:S.dailyGoal===v?"#fff":"#374151",border:"1px solid "+(S.dailyGoal===v?T.p:"#e5e7eb"),borderRadius:"8px",padding:"7px 0",fontSize:"13px",fontWeight:S.dailyGoal===v?"700":"400"}, function(){ S.dailyGoal=v; save(); render(); }));
+  });
+  goalBox.appendChild(goalBtnsRow);
+  var customGoal = el("input",{type:"number",placeholder:"Objectif perso…",min:"10",max:"9999",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"7px 10px",fontSize:"13px"}});
+  customGoal.addEventListener("keydown",function(e){
+    if(e.key==="Enter"){
+      var v=parseInt(customGoal.value,10);
+      if(v>0){ S.dailyGoal=v; save(); render(); }
+    }
+  });
+  goalBox.appendChild(customGoal);
+  wrapper.appendChild(goalBox);
+
+  // XP progress
+  var xpBox = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"});
+  xpBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["Vers niveau "+(S.level+1)+" — "+xpPct+"%"]));
+  xpBox.appendChild(div({background:"#e5e7eb",borderRadius:"6px",height:"8px"}),[
+    div({background:T.p,width:xpPct+"%",height:"8px",borderRadius:"6px",transition:"width 0.5s"})
+  ]);
+  wrapper.appendChild(xpBox);
+
+  // Skills
+  var skillBox = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginBottom:"12px"});
+  skillBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["Compétences"]));
+  CATS.forEach(function(c){
+    var done  = S.quests.filter(function(q){ return q.status==="done" && q.cat===c.id; }).length;
+    var total = S.quests.filter(function(q){ return q.cat===c.id; }).length;
+    var pct   = total>0 ? Math.round((done/total)*100) : 0;
+    var row   = div({marginBottom:"10px"});
+    row.appendChild(div({display:"flex",justifyContent:"space-between",marginBottom:"3px"},[
+      el("span",{style:{fontSize:"13px",color:"#374151"}},[c.icon+" "+c.label]),
+      el("span",{style:{fontSize:"12px",color:T.d,fontWeight:"600"}},[done+"/"+total])
+    ]));
+    row.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"5px"}),[
+      div({background:T.p,width:pct+"%",height:"5px",borderRadius:"4px"})
+    ]);
+    skillBox.appendChild(row);
+  });
+  wrapper.appendChild(skillBox);
+
+  // Theme
+  var themeBox = div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"});
+  themeBox.appendChild(el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🎨 Thème"]));
+  var themeGrid = div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"});
+  Object.keys(THEMES).forEach(function(k){
+    var th = THEMES[k];
+    var tb = div({background:th.l,border:"2px solid "+(S.themeKey===k?th.p:th.b),borderRadius:"12px",padding:"10px",cursor:"pointer",display:"flex",alignItems:"center",gap:"8px"});
+    tb.appendChild(div({width:"18px",height:"18px",borderRadius:"50%",background:th.p,flexShrink:"0"}));
+    tb.appendChild(el("span",{style:{fontSize:"13px",fontWeight:S.themeKey===k?"700":"400",color:th.d}},[th.name]));
+    if(S.themeKey===k) tb.appendChild(el("span",{style:{marginLeft:"auto"}},["✓"]));
+    (function(key){ tb.addEventListener("click",function(){ S.themeKey=key; save(); render(); }); })(k);
+    themeGrid.appendChild(tb);
+  });
+  themeBox.appendChild(themeGrid);
+  wrapper.appendChild(themeBox);
+
+  return wrapper;
+}
+
+/* ═══════════════════════════════════════════════
+   MODALS — EXPRESS
+═══════════════════════════════════════════════ */
+function openExpress(T){
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"4px"}},["⚡ Quête Express"]));
+  c.appendChild(el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"14px"}},["15 min max — clique pour valider"]));
+  EXPRESS.forEach(function(q){
+    var row = div({background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"12px 14px",marginBottom:"8px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"});
+    row.appendChild(div({},[
+      el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#111827"}},[q.title]),
+      el("div",{style:{fontSize:"12px",color:"#6b7280"}},[q.desc])
+    ]));
+    row.appendChild(el("span",{style:{fontSize:"12px",fontWeight:"700",color:T.d,background:T.l,borderRadius:"8px",padding:"4px 8px",marginLeft:"8px"}},["+" +q.xp]));
+    (function(quest){
+      row.addEventListener("click",function(){
+        addXp(quest.xp);
+        S.streak++;
+        S.log.unshift({date:fmtDate(), text:"Mini-quête '"+quest.title+"'. +"+quest.xp+" XP !"});
         save(); render(); m.remove();
       });
-      return r;
-    }),
-    btn("Fermer",{width:"100%",marginTop:"4px",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+    })(q);
+    c.appendChild(row);
+  });
+  c.appendChild(btn("Fermer",{width:"100%",marginTop:"4px",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
 }
 
+/* ═══════════════════════════════════════════════
+   MODALS — THEMES
+═══════════════════════════════════════════════ */
 function openThemes(){
-  const t=T();
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["🎨 Thème"]),
-    div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"},
-      Object.entries(THEMES).map(([k,th])=>{
-        const b=div({background:th.l,border:`2px solid ${S.themeKey===k?th.p:th.b}`,borderRadius:"14px",padding:"14px 10px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"6px"},[
-          div({width:"32px",height:"32px",borderRadius:"50%",background:th.p}),
-          el("span",{style:{fontSize:"13px",fontWeight:"600",color:th.d}},[th.name]),
-          S.themeKey===k?el("span",{style:{fontSize:"11px",color:th.d,opacity:"0.7"}},["Actif ✓"]):null,
-        ]);
-        b.addEventListener("click",()=>{ S.themeKey=k; save(); render(); m.remove(); });
-        return b;
-      })
-    ),
-    btn("Fermer",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+  var T = THEMES[S.themeKey];
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["🎨 Thème"]));
+  var grid = div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"});
+  Object.keys(THEMES).forEach(function(k){
+    var th = THEMES[k];
+    var b  = div({background:th.l,border:"2px solid "+(S.themeKey===k?th.p:th.b),borderRadius:"14px",padding:"14px 10px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"6px"});
+    b.appendChild(div({width:"32px",height:"32px",borderRadius:"50%",background:th.p}));
+    b.appendChild(el("span",{style:{fontSize:"13px",fontWeight:"600",color:th.d}},[th.name]));
+    if(S.themeKey===k) b.appendChild(el("span",{style:{fontSize:"11px",color:th.d,opacity:"0.7"}},["Actif ✓"]));
+    (function(key){ b.addEventListener("click",function(){ S.themeKey=key; save(); render(); m.remove(); }); })(k);
+    grid.appendChild(b);
+  });
+  c.appendChild(grid);
+  c.appendChild(btn("Fermer",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
 }
 
-function questForm(q, onSave){
-  const t=T();
-  const f={ title:q?.title||"", desc:q?.desc||"", cat:q?.cat||"culture", diff:q?.diff||"easy", subs:q?.subs?.join(", ")||"", folderId:q?.folderId||"", status:q?.status||"active", goalTarget:q?.goalTarget||"", goalUnit:q?.goalUnit||"" };
+/* ═══════════════════════════════════════════════
+   MODALS — QUEST FORM
+═══════════════════════════════════════════════ */
+function questForm(q, T, onSave){
+  var titleInp    = mkInput("Nom de la quête *", q?q.title:"");
+  var descInp     = mkInput("Description",        q?q.desc:"");
+  var catSel      = mkSelect(CATS.map(function(c){ return [c.id, c.icon+" "+c.label]; }), q?q.cat:"culture", {width:"100%"});
+  var diffSel     = mkSelect(DIFFS.map(function(d){ return [d.id, d.label+" ("+d.xp+" XP)"]; }), q?q.diff:"easy", {width:"100%"});
+  var folderOpts  = [["","Aucun dossier"]].concat(S.folders.map(function(f){ return [f.id, f.icon+" "+f.title]; }));
+  var folderSel   = mkSelect(folderOpts, q?(q.folderId||""):"", {width:"100%",marginBottom:"10px"});
+  var goalTgtInp  = el("input",{type:"number",min:"1",placeholder:"Objectif (ex: 50)",value:q&&q.goalTarget?String(q.goalTarget):"",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",boxSizing:"border-box"}});
+  var goalUnitInp = mkInput("Unité (pages, km…)", q?q.goalUnit:"", {marginBottom:"0"});
+  var subsInp     = mkInput("Sous-objectifs (séparés par des virgules)", q&&q.subs?q.subs.join(", "):"");
+  var waitChk     = el("input",{type:"checkbox"}); waitChk.checked = !!(q && q.status==="waiting");
+  var waitLbl     = el("label",{style:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px",cursor:"pointer"}},[waitChk,"⏳ Démarrer plus tard"]);
 
-  const titleInp=inp("Nom de la quête *",f.title,e=>f.title=e.target.value);
-  const descInp =inp("Description",       f.desc, e=>f.desc =e.target.value);
-  const catSel  =sel(CATS.map(c=>[c.id,`${c.icon} ${c.label}`]),    f.cat,  e=>f.cat=e.target.value);
-  const diffSel =sel(DIFFS.map(d=>[d.id,`${d.label} (${d.xp} XP)`]),f.diff, e=>f.diff=e.target.value);
-  const folderSel=sel([["","Aucun dossier"],...S.folders.map(fo=>[fo.id,`${fo.icon} ${fo.title}`])],f.folderId,e=>f.folderId=e.target.value,{width:"100%",marginBottom:"10px",boxSizing:"border-box"});
-  const subsInp=inp("Sous-objectifs (séparés par des virgules)",f.subs,e=>f.subs=e.target.value);
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[q?"Modifier la quête":"Nouvelle quête"]));
+  c.appendChild(titleInp);
+  c.appendChild(descInp);
 
-  // Progress goal
-  const goalRow=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"},[
-    el("input",{placeholder:"Objectif (ex: 50)",type:"number",min:"1",value:f.goalTarget||"",style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",width:"100%",boxSizing:"border-box"}}),
-    el("input",{placeholder:"Unité (ex: pages, km…)",value:f.goalUnit||"",style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",width:"100%",boxSizing:"border-box"}}),
-  ]);
-  goalRow.children[0].addEventListener("input",e=>f.goalTarget=e.target.value);
-  goalRow.children[1].addEventListener("input",e=>f.goalUnit=e.target.value);
+  var catDiffRow = div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"});
+  catDiffRow.appendChild(catSel); catDiffRow.appendChild(diffSel);
+  c.appendChild(catDiffRow);
+  c.appendChild(folderSel);
 
-  const waitChk=el("input",{type:"checkbox"}); waitChk.checked=f.status==="waiting"; waitChk.addEventListener("change",e=>f.status=e.target.checked?"waiting":"active");
-  const waitLbl=el("label",{style:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px",cursor:"pointer"}},[waitChk,"⏳ Démarrer plus tard"]);
+  c.appendChild(el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"6px"}},["Objectif chiffré (optionnel)"]));
+  var goalRow = div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"});
+  goalRow.appendChild(goalTgtInp); goalRow.appendChild(goalUnitInp);
+  c.appendChild(goalRow);
+  c.appendChild(subsInp);
+  c.appendChild(div({display:"flex",gap:"16px",marginBottom:"14px",flexWrap:"wrap"},[waitLbl]));
 
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[q?"Modifier la quête":"Nouvelle quête"]),
-    titleInp, descInp,
-    div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"},[catSel,diffSel]),
-    folderSel,     el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"6px"}},["Objectif chiffré (optionnel)"]),
-    goalRow,
-    subsInp,
-    div({display:"flex",gap:"16px",marginBottom:"14px",flexWrap:"wrap"},[waitLbl]),
-    btn(q?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
-      if(!f.title.trim()) return;
-      onSave(f); m.remove();
-    }),
-    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+  c.appendChild(btn(q?"Enregistrer":"Créer",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
+    if(!titleInp.value.trim()){ titleInp.style.border="1px solid #ef4444"; titleInp.focus(); return; }
+    onSave({
+      title:      titleInp.value.trim(),
+      desc:       descInp.value.trim(),
+      cat:        catSel.value,
+      diff:       diffSel.value,
+      folderId:   folderSel.value || null,
+      goalTarget: parseInt(goalTgtInp.value,10)||0,
+      goalUnit:   goalUnitInp.value.trim(),
+      subs:       subsInp.value,
+      status:     waitChk.checked?"waiting":"active"
+    });
+    m.remove();
+  }));
+  c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
 }
 
-function openCreateQuest(){
-  questForm(null, f=>{
-    const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0];
-    const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean);
-    S.quests.unshift({id:uid(),title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map(()=>false),folderId:f.folderId||null,goalTarget:parseInt(f.goalTarget)||0,goalUnit:f.goalUnit||"",goalProgress:0});
+function openCreateQuest(T){
+  questForm(null, T, function(f){
+    var diff = DIFFS.find(function(d){ return d.id===f.diff; })||DIFFS[0];
+    var subs = f.subs.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+    S.quests.unshift({
+      id:uid(), title:f.title, desc:f.desc, cat:f.cat, diff:f.diff,
+      xp:diff.xp, status:f.status, subs:subs, subsChecked:subs.map(function(){ return false; }),
+      folderId:f.folderId, goalTarget:f.goalTarget, goalUnit:f.goalUnit, goalProgress:0
+    });
     save(); render();
   });
 }
+
 function openEditQuest(q){
-  questForm(q, f=>{
-    const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0];
-    const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean);
-    const newTarget=parseInt(f.goalTarget)||0;
-    Object.assign(q,{title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map((_,i)=>q.subs[i]!==undefined?q.subsChecked[i]:false),folderId:f.folderId||null,goalTarget:newTarget,goalUnit:f.goalUnit||""});
-    if(!q.goalProgress) q.goalProgress=0;
+  var T = THEMES[S.themeKey];
+  questForm(q, T, function(f){
+    var diff = DIFFS.find(function(d){ return d.id===f.diff; })||DIFFS[0];
+    var subs = f.subs.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+    var prevSubs = q.subs||[];
+    q.title      = f.title;
+    q.desc       = f.desc;
+    q.cat        = f.cat;
+    q.diff       = f.diff;
+    q.xp         = diff.xp;
+    q.status     = f.status;
+    q.subs       = subs;
+    q.subsChecked= subs.map(function(_,i){ return !!prevSubs[i]&&!!q.subsChecked[i]; });
+    q.folderId   = f.folderId;
+    q.goalTarget = f.goalTarget;
+    q.goalUnit   = f.goalUnit;
+    if(q.goalProgress===undefined) q.goalProgress=0;
     save(); render();
   });
 }
 
-function folderForm(folder, onSave){
-  const t=T();
-  const f={ title:folder?.title||"", desc:folder?.desc||"", icon:folder?.icon||"📁", cat:folder?.cat||"culture" };
-  const titleInp=inp("Nom du dossier *",f.title,e=>f.title=e.target.value);
-  const descInp =inp("Description",      f.desc, e=>f.desc =e.target.value);
-  const iconInp =el("input",{placeholder:"📁",value:f.icon,style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"22px",textAlign:"center",width:"80px"}}); iconInp.addEventListener("input",e=>f.icon=e.target.value);
-  const catSel  =sel(CATS.map(c=>[c.id,`${c.icon} ${c.label}`]),f.cat,e=>f.cat=e.target.value,{flex:"1"});
-  const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[folder?"Modifier le dossier":"Nouveau dossier"]),
-    titleInp, descInp,
-    div({display:"grid",gridTemplateColumns:"80px 1fr",gap:"10px",marginBottom:"14px"},[iconInp,catSel]),
-    btn(folder?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{ if(!f.title.trim()) return; onSave(f); m.remove(); }),
-    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
-  ]);
-  const m=modal(c);
+/* ═══════════════════════════════════════════════
+   MODALS — FOLDER FORM
+═══════════════════════════════════════════════ */
+function folderForm(folder, T, onSave){
+  var titleInp = mkInput("Nom du dossier *", folder?folder.title:"");
+  var descInp  = mkInput("Description",      folder?folder.desc:"");
+  var iconInp  = el("input",{placeholder:"📁",value:folder?folder.icon:"📁",style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"22px",textAlign:"center",width:"100%",boxSizing:"border-box"}});
+  var catSel   = mkSelect(CATS.map(function(c){ return [c.id,c.icon+" "+c.label]; }), folder?folder.cat:"culture", {width:"100%"});
+
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[folder?"Modifier le dossier":"Nouveau dossier"]));
+  c.appendChild(titleInp);
+  c.appendChild(descInp);
+  var icRow = div({display:"grid",gridTemplateColumns:"80px 1fr",gap:"10px",marginBottom:"14px"});
+  icRow.appendChild(iconInp); icRow.appendChild(catSel);
+  c.appendChild(icRow);
+  c.appendChild(btn(folder?"Enregistrer":"Créer",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
+    if(!titleInp.value.trim()){ titleInp.style.border="1px solid #ef4444"; titleInp.focus(); return; }
+    onSave({title:titleInp.value.trim(), desc:descInp.value.trim(), icon:iconInp.value||"📁", cat:catSel.value});
+    m.remove();
+  }));
+  c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
 }
 
-function openFolderCreate(){ folderForm(null,f=>{ S.folders.unshift({id:uid(),...f}); save(); render(); }); }
-function openEditFolder(folder){ folderForm(folder,f=>{ Object.assign(folder,f); save(); render(); }); }
+function openFolderCreate(T){
+  folderForm(null, T, function(f){
+    S.folders.unshift({id:uid(), title:f.title, desc:f.desc, icon:f.icon, cat:f.cat});
+    save(); render();
+  });
+}
 
-// ─── BOOT ──────────────────────────────────────────────
-render();
+function openEditFolder(T, folder){
+  folderForm(folder, T, function(f){
+    folder.title=f.title; folder.desc=f.desc; folder.icon=f.icon; folder.cat=f.cat;
+    save(); render();
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   MODALS — GUILD
+═══════════════════════════════════════════════ */
+function openCreateGuild(T, isEdit){
+  var nameInp = mkInput("Nom de la guilde *", isEdit?S.guildName:"");
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[isEdit?"Renommer la guilde":"Créer ma guilde"]));
+  c.appendChild(nameInp);
+  c.appendChild(btn(isEdit?"Enregistrer":"Créer",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
+    if(!nameInp.value.trim()){ nameInp.style.border="1px solid #ef4444"; nameInp.focus(); return; }
+    S.guildName = nameInp.value.trim();
+    if(!isEdit) S.guildChallenges=[];
+    save(); render(); m.remove();
+  }));
+  c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
+}
+
+/* ═══════════════════════════════════════════════
+   MODALS — PROFIL EDIT
+═══════════════════════════════════════════════ */
+function openEditProfil(T){
+  var nameInp  = mkInput("Ton pseudo *", S.playerName||"");
+  var avatars  = ["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
+  var chosen   = S.playerAvatar||"⚔️";
+  var avBtns   = [];
+
+  function refreshAv(){
+    avBtns.forEach(function(b,i){
+      b.style.background = avatars[i]===chosen ? T.l : "#f9fafb";
+      b.style.border     = "2px solid "+(avatars[i]===chosen ? T.p : "#e5e7eb");
+      b.style.transform  = avatars[i]===chosen ? "scale(1.1)" : "scale(1)";
+    });
+  }
+
+  var grid = div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"10px",marginBottom:"14px"});
+  avatars.forEach(function(a,i){
+    var b = div({background:a===chosen?T.l:"#f9fafb",border:"2px solid "+(a===chosen?T.p:"#e5e7eb"),borderRadius:"12px",padding:"10px",textAlign:"center",fontSize:"26px",cursor:"pointer",transition:"all 0.15s"},[a]);
+    b.addEventListener("click",(function(av){ return function(){ chosen=av; refreshAv(); }; })(a));
+    avBtns.push(b);
+    grid.appendChild(b);
+  });
+
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},["✏️ Modifier le profil"]));
+  c.appendChild(el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton pseudo"]));
+  c.appendChild(nameInp);
+  c.appendChild(el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"8px"}},["Ton avatar"]));
+  c.appendChild(grid);
+  c.appendChild(btn("Enregistrer",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
+    if(!nameInp.value.trim()){ nameInp.style.border="1px solid #ef4444"; nameInp.focus(); return; }
+    S.playerName   = nameInp.value.trim();
+    S.playerAvatar = chosen;
+    save(); render(); m.remove();
+  }));
+  c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
+}
+
+/* ═══════════════════════════════════════════════
+   MODALS — RESET PROFIL
+═══════════════════════════════════════════════ */
+function confirmResetProfil(T){
+  var c = div({});
+  c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"8px"}},["🔄 Réinitialiser le profil"]));
+  c.appendChild(el("div",{style:{fontSize:"14px",color:"#6b7280",marginBottom:"20px",lineHeight:"1.6"}},["Toute ta progression sera effacée (quêtes, XP, niveau, dossiers, journal, guilde). Cette action est irréversible."]));
+  c.appendChild(btn("⚠️ Réinitialiser",{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
+    var keptTheme = S.themeKey;
+    localStorage.removeItem("sq_state");
+    Object.keys(S).forEach(function(k){ delete S[k]; });
+    var fresh = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    Object.keys(fresh).forEach(function(k){ S[k]=fresh[k]; });
+    S.themeKey = keptTheme;
+    save();
+    m.remove();
+    currentTab = "home";
+    document.getElementById("app").innerHTML="";
+    showOnboarding(function(){ render(); });
+  }));
+  c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
+  var m = modal(c);
+}
+
+/* ═══════════════════════════════════════════════
+   ONBOARDING
+═══════════════════════════════════════════════ */
+function showOnboarding(onDone){
+  var T       = THEMES[S.themeKey];
+  var avatars = ["⚔️","🧙","🏹","🛡️","🌟","🦊","🐉","🎮"];
+  var chosen  = "⚔️";
+  var avBtns  = [];
+
+  function refreshAv(){
+    avBtns.forEach(function(b,i){
+      b.style.background = avatars[i]===chosen ? T.l : "#fff";
+      b.style.border     = "2px solid "+(avatars[i]===chosen ? T.p : "#e5e7eb");
+      b.style.transform  = avatars[i]===chosen ? "scale(1.12)" : "scale(1)";
+    });
+  }
+
+  var overlay = div({position:"fixed",inset:"0",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",zIndex:"500",maxWidth:"400px",margin:"0 auto"});
+
+  overlay.appendChild(el("div",{style:{fontWeight:"800",fontSize:"32px",color:T.d,letterSpacing:"-1px",marginBottom:"8px"}},["⚔️ SideQuest"]));
+  overlay.appendChild(el("div",{style:{fontSize:"15px",color:"#6b7280",marginBottom:"36px",textAlign:"center"}},["Transforme ta vie en aventure."]));
+  overlay.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start",width:"100%"}},["Comment tu t'appelles ?"]));
+
+  var nameInp = el("input",{placeholder:"Ton pseudo…",style:{width:"100%",border:"2px solid "+T.b,borderRadius:"12px",padding:"12px 16px",fontSize:"16px",marginBottom:"24px",boxSizing:"border-box"}});
+  nameInp.addEventListener("focus", function(){ nameInp.style.borderColor=T.p; });
+  nameInp.addEventListener("blur",  function(){ nameInp.style.borderColor=T.b; });
+  overlay.appendChild(nameInp);
+
+  overlay.appendChild(el("div",{style:{fontSize:"14px",fontWeight:"600",color:"#374151",marginBottom:"8px",alignSelf:"flex-start",width:"100%"}},["Choisis ton avatar"]));
+
+  var avGrid = div({display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"10px",marginBottom:"32px",width:"100%"});
+  avatars.forEach(function(a){
+    var b = div({background:a===chosen?T.l:"#fff",border:"2px solid "+(a===chosen?T.p:"#e5e7eb"),borderRadius:"14px",padding:"12px",textAlign:"center",fontSize:"28px",cursor:"pointer",transition:"all 0.15s"},[a]);
+    b.addEventListener("click",(function(av){ return function(){ chosen=av; refreshAv(); }; })(a));
+    avBtns.push(b);
+    avGrid.appendChild(b);
+  });
+  overlay.appendChild(avGrid);
+
+  overlay.appendChild(btn("Commencer l'aventure →",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"14px",padding:"14px",fontWeight:"700",fontSize:"16px"}, function(){
+    var name = nameInp.value.trim();
+    if(!name){ nameInp.style.border="2px solid #ef4444"; nameInp.focus(); return; }
+    S.playerName   = name;
+    S.playerAvatar = chosen;
+    save();
+    if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    onDone();
+  }));
+
+  var app = document.getElementById("app");
+  // Place full-width wrapper
+  var wrapper = div({position:"fixed",inset:"0",display:"flex",justifyContent:"center",background:T.bg,zIndex:"500"});
+  wrapper.appendChild(overlay);
+  app.appendChild(wrapper);
+}
+
+/* ═══════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════ */
+if(!S.playerName){
+  showOnboarding(function(){ render(); });
+} else {
+  render();
+}
 </script>
 </body>
 </html>
