@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="SideQuest"/>
 <meta name="theme-color" content="#10b981"/>
+<link rel="apple-touch-icon" href="logo.png">
+<link rel="icon" type="image/png" href="logo.png">
 <title>SideQuest</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -70,7 +72,7 @@ const DEFAULT_STATE = {
   themeKey:"emerald",
   quests:[], folders:[], log:[],
   xp:0, level:1, streak:0, xpToday:0, dailyGoal:200,
-  guildName:"", guildCode:"", guildMembers:[], guildChallenges:[],
+  guildName:"", guildChallenges:[],
   playerName:"", playerAvatar:"⚔️",
 };
 
@@ -79,8 +81,6 @@ let S = LS.get("sq_state");
 if(!S){ S = JSON.parse(JSON.stringify(DEFAULT_STATE)); }
 // Ensure new fields exist for old saves
 if(!S.guildName)      S.guildName="";
-if(!S.guildCode)      S.guildCode="";
-if(!S.guildMembers)   S.guildMembers=[];
 if(!S.guildChallenges)S.guildChallenges=[];
 if(!S.xpToday)        S.xpToday=0;
 if(!S.dailyGoal)      S.dailyGoal=200;
@@ -224,9 +224,8 @@ function render(){
   // ── CONTENT ──
   let content;
   if(currentTab==="home")    content=renderHome();
-  else if(currentTab==="quests")  content=renderQuests();
+  else   if(currentTab==="quests")  content=renderQuests();
   else if(currentTab==="folders") content=renderFolders();
-  else if(currentTab==="guild")   content=renderGuild();
   else if(currentTab==="journal") content=renderJournal();
   else if(currentTab==="profil")  content=renderProfil();
 
@@ -234,12 +233,11 @@ function render(){
 
   // ── NAV ──
   const navItems=[
-    {id:"home",icon:"🏠",label:"Accueil"},
-    {id:"quests",icon:"⚔️",label:"Quêtes"},
+    {id:"home",   icon:"🏠",label:"Accueil"},
+    {id:"quests", icon:"⚔️",label:"Quêtes"},
     {id:"folders",icon:"📁",label:"Dossiers"},
-    {id:"guild",icon:"🏰",label:"Guilde"},
     {id:"journal",icon:"📖",label:"Journal"},
-    {id:"profil",icon:"👤",label:"Profil"},
+    {id:"profil", icon:"👤",label:"Profil"},
   ];
   const nav=div({position:"fixed",bottom:"0",left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"400px",background:"#fff",borderTop:"1px solid #e5e7eb",display:"grid",gridTemplateColumns:`repeat(${navItems.length},1fr)`,padding:"6px 0 8px",zIndex:"100"},
     navItems.map(n=>{
@@ -320,7 +318,31 @@ function questCard(q, slim=false){
     tags,
   ]);
 
-  let subsEl=null;
+  // — Chiffered progress goal —
+  let goalEl=null;
+  if(q.goalTarget>0 && !isDone){
+    const prog=q.goalProgress||0;
+    const pct=Math.min(100,Math.round((prog/q.goalTarget)*100));
+    const addInp=el("input",{type:"number",min:"0",placeholder:"+ "+q.goalUnit,style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
+    const addBtn=btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 12px",fontWeight:"600"},()=>{
+      const val=parseFloat(addInp.value); if(!val||val<=0) return;
+      q.goalProgress=Math.min(q.goalTarget,(q.goalProgress||0)+val);
+      if(q.goalProgress>=q.goalTarget && q.status==="active"){
+        // auto-suggest completion
+      }
+      save(); render();
+    });
+    goalEl=div({marginTop:"10px",background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px"},[
+      div({display:"flex",justifyContent:"space-between",marginBottom:"4px"},[
+        el("span",{style:{fontSize:"12px",fontWeight:"600",color:"#374151"}},[prog+" / "+q.goalTarget+" "+q.goalUnit]),
+        el("span",{style:{fontSize:"12px",fontWeight:"700",color:pct>=100?t.p:"#6b7280"}},[pct+"%"+(pct>=100?" ✓":"")]),
+      ]),
+      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"8px"},[
+        div({background:pct>=100?t.p:t.p,width:pct+"%",height:"6px",borderRadius:"4px",transition:"width 0.3s"}),
+      ]),
+      div({display:"flex",gap:"6px"},[addInp,addBtn]),
+    ]);
+  }
   if(!isDone&&q.subs.length>0){
     const bar=div({background:"#e5e7eb",borderRadius:"4px",height:"4px",marginBottom:"6px"},[div({background:t.p,width:`${progress}%`,height:"4px",borderRadius:"4px"})]);
     const items=q.subs.map((s,i)=>{
@@ -480,115 +502,108 @@ function renderFolders(){
 // ─── GUILD ─────────────────────────────────────────────
 function renderGuild(){
   const t=T();
-  const hasGuild=S.guildCode!=="";
-  const header=el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"16px"}},["⚔️ Guilde"]);
+  const hasGuild = S.guildName!=="";
 
   if(!hasGuild){
-    let form=null;
-    const wrap=div({},[
-      header,
-      div({background:t.l,border:`1px solid ${t.b}`,borderRadius:"14px",padding:"20px",textAlign:"center",marginBottom:"12px"},[
-        el("div",{style:{fontSize:"32px",marginBottom:"8px"}},["🏰"]),
-        el("div",{style:{fontWeight:"600",fontSize:"15px",color:t.d,marginBottom:"4px"}},["Aucune guilde"]),
-        el("div",{style:{fontSize:"13px",color:"#6b7280",marginBottom:"16px"}},["Crée ta guilde ou rejoins celle d'un ami"]),
-        div({display:"flex",gap:"10px"},[
-          btn("Créer",{flex:"1",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"10px",fontWeight:"600"},()=>{
-            const nameInp=inp("Nom de la guilde","",e=>{});
-            const c=div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginTop:"10px"},[
-              el("div",{style:{fontWeight:"600",marginBottom:"10px"}},["Nom de la guilde"]),
-              nameInp,
-              btn("Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"11px",fontWeight:"700"},()=>{
-                if(!nameInp.value.trim()) return;
-                S.guildName=nameInp.value.trim();
-                S.guildCode=Math.random().toString(36).slice(2,6).toUpperCase();
-                S.guildMembers=[{name:"Moi",xp:S.xp+S.level*xpFor(S.level),joined:fmtDate()}];
-                S.guildChallenges=[{id:uid(),title:"Lire 50 pages en commun",target:50,unit:"pages",contributions:{"Moi":0},done:false}];
-                save(); render();
-              }),
-            ]);
-            wrap.appendChild(c);
-          }),
-          btn("Rejoindre",{flex:"1",background:"#fff",color:t.d,border:`1px solid ${t.b}`,borderRadius:"10px",padding:"10px",fontWeight:"600"},()=>{
-            const codeInp=inp("Code (ex: AB12)","",e=>{});
-            const c=div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px",marginTop:"10px"},[
-              el("div",{style:{fontWeight:"600",marginBottom:"10px"}},["Code d'invitation"]),
-              codeInp,
-              btn("Rejoindre",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"11px",fontWeight:"700"},()=>{
-                // Local only guild
-                if(!codeInp.value.trim()) return;
-                S.guildCode=codeInp.value.toUpperCase();
-                S.guildName="Guilde "+S.guildCode;
-                S.guildMembers=[{name:"Moi",xp:0,joined:fmtDate()}];
-                S.guildChallenges=[];
-                save(); render();
-              }),
-            ]);
-            wrap.appendChild(c);
+    return div({},[
+      el("div",{style:{fontWeight:"600",fontSize:"16px",color:"#111827",marginBottom:"16px"}},["⚔️ Ma Guilde"]),
+      div({background:t.l,border:"1.5px solid "+t.b,borderRadius:"14px",padding:"24px 20px",textAlign:"center",marginBottom:"16px"},[
+        el("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🏰"]),
+        el("div",{style:{fontWeight:"700",fontSize:"16px",color:t.d,marginBottom:"8px"}},["Crée ta guilde"]),
+        el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.6",marginBottom:"20px"}},["Donne un nom à ta guilde, ajoute des défis personnels et suis ta progression."]),
+        btn("+ Créer ma guilde",{background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"12px 24px",fontWeight:"700",fontSize:"14px"},()=>openCreateGuild()),
+      ]),
+      div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"16px"},[
+        el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"8px"}},["ℹ️ À propos des guildes"]),
+        el("div",{style:{fontSize:"13px",color:"#6b7280",lineHeight:"1.7"}},["Les guildes sont sauvegardées sur ton appareil. Tu peux créer une guilde solo pour suivre tes propres défis et objectifs collectifs fictifs."]),
+      ]),
+    ]);
+  }
+
+  // Guild exists — render it
+  const chalEls = S.guildChallenges.map((ch,ci)=>{
+    const tot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
+    const pct=Math.min(100,Math.round((tot/ch.target)*100));
+    const contribInp=el("input",{type:"number",placeholder:"+ quantité",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
+    return div({background:"#fff",border:"1px solid "+(ch.done?t.b:"#e5e7eb"),borderRadius:"14px",padding:"14px",marginBottom:"10px"},[
+      div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"},[
+        el("div",{style:{fontWeight:"600",fontSize:"14px",flex:"1"}},[ch.title]),
+        div({display:"flex",gap:"6px",alignItems:"center"},[
+          ch.done?el("span",{style:{background:t.l,color:t.d,borderRadius:"8px",padding:"3px 8px",fontSize:"12px",fontWeight:"700"}},["✓ Terminé"]):null,
+          btn("🗑️",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"6px",padding:"3px 7px",fontSize:"12px"},()=>{
+            S.guildChallenges.splice(ci,1); save(); render();
           }),
         ]),
       ]),
-    ]);
-    return wrap;
-  }
-
-  // Show guild
-  const lb=[...S.guildMembers].sort((a,b)=>b.xp-a.xp);
-  const challenges=S.guildChallenges;
-
-  const leaderboard=div({background:"#fff",border:`1px solid ${t.b}`,borderRadius:"14px",padding:"16px",marginBottom:"14px"},[
-    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"12px"}},["🏆 Classement"]),
-    ...lb.map((m,i)=>div({display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",borderBottom:i<lb.length-1?"1px solid #f3f4f6":"none"},[
-      div({width:"24px",height:"24px",borderRadius:"50%",background:i===0?"#fbbf24":i===1?"#9ca3af":i===2?"#d97706":t.l,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"700",color:i<3?"#fff":t.d},[String(i+1)]),
-      el("div",{style:{flex:"1",fontWeight:m.name==="Moi"?"700":"400"}},[m.name+(m.name==="Moi"?" (moi)":"")]),
-      el("div",{style:{fontSize:"13px",fontWeight:"600",color:t.d}},[`${m.xp} XP`]),
-    ])),
-  ]);
-
-  const chalEls=challenges.map(ch=>{
-    const tot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
-    const pct=Math.min(100,Math.round((tot/ch.target)*100));
-    const contribInp=inp(`+ ${ch.unit}`,"",e=>{});
-    contribInp.type="number";
-    return div({background:"#fff",border:`1px solid ${ch.done?t.b:"#e5e7eb"}`,borderRadius:"14px",padding:"14px",marginBottom:"10px"},[
-      div({display:"flex",justifyContent:"space-between"},[
-        el("div",{style:{fontWeight:"600",fontSize:"14px"}},[ch.title]),
-        ch.done?el("span",{style:{background:t.l,color:t.d,borderRadius:"8px",padding:"3px 8px",fontSize:"12px",fontWeight:"700"}},["✓"]):null,
+      el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"8px"}},[tot+" / "+ch.target+" "+ch.unit]),
+      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"10px"},[
+        div({background:t.p,width:pct+"%",height:"6px",borderRadius:"4px"}),
       ]),
-      el("div",{style:{fontSize:"12px",color:"#6b7280",marginTop:"2px"}},[`${tot}/${ch.target} ${ch.unit}`]),
-      div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginTop:"8px",marginBottom:"8px"}),[div({background:t.p,width:`${pct}%`,height:"6px",borderRadius:"4px"})],
       !ch.done?div({display:"flex",gap:"8px"},[
         contribInp,
         btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 14px",fontWeight:"600"},()=>{
           const val=parseInt(contribInp.value,10); if(!val||val<=0) return;
-          ch.contributions["Moi"]=(ch.contributions["Moi"]||0)+val;
-          const newTot=Object.values(ch.contributions).reduce((a,b)=>a+b,0);
-          if(newTot>=ch.target) ch.done=true;
+          ch.contributions[S.playerName]=(ch.contributions[S.playerName]||0)+val;
+          if(Object.values(ch.contributions).reduce((a,b)=>a+b,0)>=ch.target) ch.done=true;
           save(); render();
         }),
       ]):null,
     ]);
   });
 
-  const newChalInp=inp("Nouveau défi…","",e=>{});
-  const addChalBtn=btn("+",{background:t.p,color:"#fff",border:"none",borderRadius:"10px",padding:"9px 14px",fontWeight:"600"},()=>{
-    if(!newChalInp.value.trim()) return;
-    S.guildChallenges.push({id:uid(),title:newChalInp.value.trim(),target:100,unit:"points",contributions:{},done:false});
-    save(); render();
-  });
+  const newChalTitle=el("input",{placeholder:"Nom du défi…",style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
+  const newChalTarget=el("input",{type:"number",placeholder:"Objectif",style:{width:"80px",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
+  const newChalUnit=el("input",{placeholder:"Unité",style:{width:"80px",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"8px 10px",fontSize:"13px"}});
 
   return div({},[
     div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"},[
-      el("div",{style:{fontWeight:"700",fontSize:"16px",color:"#111827"}},[`⚔️ ${S.guildName}`]),
-      el("span",{style:{background:t.l,color:t.d,border:`1px solid ${t.b}`,borderRadius:"20px",padding:"4px 12px",fontSize:"12px",fontWeight:"700"}},[`#${S.guildCode}`]),
+      el("div",{style:{fontWeight:"700",fontSize:"18px",color:"#111827"}},["⚔️ "+S.guildName]),
+      btn("✏️",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"},()=>openCreateGuild(true)),
     ]),
-    leaderboard,
-    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["🎯 Défis communs"]),
+    div({background:t.l,border:"1.5px solid "+t.b,borderRadius:"14px",padding:"14px",marginBottom:"16px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"14px",color:t.d,marginBottom:"4px"}},["📊 Stats"]),
+      el("div",{style:{fontSize:"13px",color:t.d}},[
+        S.quests.filter(q=>q.status==="done").length+" quêtes terminées · Niv. "+S.level+" · "+S.xp+" XP"
+      ]),
+    ]),
+    el("div",{style:{fontWeight:"600",fontSize:"14px",color:"#111827",marginBottom:"10px"}},["🎯 Défis"]),
+    S.guildChallenges.length===0
+      ? el("div",{style:{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"12px 0",marginBottom:"10px"}},["Aucun défi pour l'instant. Ajoutes-en un !"])
+      : null,
     ...chalEls,
-    div({display:"flex",gap:"8px",marginTop:"4px"},[newChalInp,addChalBtn]),
-    btn("Quitter la guilde",{width:"100%",marginTop:"12px",background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"9px",fontSize:"13px"},()=>{
-      S.guildName=""; S.guildCode=""; S.guildMembers=[]; S.guildChallenges=[]; save(); render();
+    div({background:"#fff",border:"1px solid #e5e7eb",borderRadius:"14px",padding:"14px",marginBottom:"14px"},[
+      el("div",{style:{fontWeight:"600",fontSize:"13px",color:"#374151",marginBottom:"8px"}},["+ Nouveau défi"]),
+      div({display:"flex",gap:"6px",marginBottom:"6px"},[newChalTitle]),
+      div({display:"flex",gap:"6px"},[
+        newChalTarget, newChalUnit,
+        btn("Ajouter",{background:t.p,color:"#fff",border:"none",borderRadius:"8px",padding:"8px 12px",fontWeight:"600",fontSize:"13px"},()=>{
+          if(!newChalTitle.value.trim()) return;
+          S.guildChallenges.push({id:uid(),title:newChalTitle.value.trim(),target:parseInt(newChalTarget.value)||100,unit:newChalUnit.value.trim()||"points",contributions:{},done:false});
+          save(); render();
+        }),
+      ]),
+    ]),
+    btn("🗑️ Dissoudre la guilde",{width:"100%",background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"9px",fontSize:"13px"},()=>{
+      if(confirm("Dissoudre la guilde ? Tous les défis seront perdus.")){ S.guildName=""; S.guildChallenges=[]; save(); render(); }
     }),
   ]);
+}
+
+function openCreateGuild(isEdit){
+  const t=T();
+  const nameInp=inp("Nom de la guilde *", isEdit?S.guildName:"", e=>{});
+  const c=div({},[
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[isEdit?"Renommer la guilde":"Créer ma guilde"]),
+    nameInp,
+    btn(isEdit?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
+      if(!nameInp.value.trim()) return;
+      S.guildName=nameInp.value.trim();
+      if(!isEdit) S.guildChallenges=[];
+      save(); render(); m.remove();
+    }),
+    btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"},()=>m.remove()),
+  ]);
+  const m=modal(c);
 }
 
 // ─── JOURNAL ───────────────────────────────────────────
@@ -671,7 +686,7 @@ function renderProfil(){
       el("div",{style:{display:"inline-block",marginTop:"8px",background:t.l,color:t.d,border:"1px solid "+t.b,borderRadius:"20px",padding:"4px 14px",fontSize:"12px",fontWeight:"600"}},["🏷️ "+lvlName(S.level)]),
       div({display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"},[
         btn("✏️ Modifier le profil",{background:"#f3f4f6",color:"#374151",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>openEditProfil()),
-        btn("🔄 Nouveau profil",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>confirmResetProfil()),
+        btn("🔄 Réinitialiser le profil",{background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"10px",padding:"8px 14px",fontSize:"13px"},()=>confirmResetProfil()),
       ]),
     ]),
     // — Objectif quotidien —
@@ -748,9 +763,9 @@ function openEditProfil(){
 function confirmResetProfil(){
   const t=T();
   const c=div({},[
-    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"8px"}},["🔄 Nouveau profil"]),
-    el("div",{style:{fontSize:"14px",color:"#6b7280",marginBottom:"20px",lineHeight:"1.6"}},["Toute ta progression sera effacée (quêtes, XP, niveau, dossiers, journal). Cette action est irréversible."]),
-    btn("⚠️ Recommencer de zéro",{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
+    el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"8px"}},["🔄 Réinitialiser le profil"]),
+    el("div",{style:{fontSize:"14px",color:"#6b7280",marginBottom:"20px",lineHeight:"1.6"}},["Toute ta progression sera effacée (quêtes, XP, niveau, dossiers, journal, guilde). Cette action est irréversible."]),
+    btn("⚠️ Réinitialiser",{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
       // Full wipe
       localStorage.removeItem("sq_state");
       for(const k of Object.keys(S)) delete S[k];
@@ -815,14 +830,22 @@ function openThemes(){
 
 function questForm(q, onSave){
   const t=T();
-  const f={ title:q?.title||"", desc:q?.desc||"", cat:q?.cat||"culture", diff:q?.diff||"easy", subs:q?.subs?.join(", ")||"", folderId:q?.folderId||"", status:q?.status||"active" };
+  const f={ title:q?.title||"", desc:q?.desc||"", cat:q?.cat||"culture", diff:q?.diff||"easy", subs:q?.subs?.join(", ")||"", folderId:q?.folderId||"", status:q?.status||"active", goalTarget:q?.goalTarget||"", goalUnit:q?.goalUnit||"" };
 
   const titleInp=inp("Nom de la quête *",f.title,e=>f.title=e.target.value);
   const descInp =inp("Description",       f.desc, e=>f.desc =e.target.value);
   const catSel  =sel(CATS.map(c=>[c.id,`${c.icon} ${c.label}`]),    f.cat,  e=>f.cat=e.target.value);
   const diffSel =sel(DIFFS.map(d=>[d.id,`${d.label} (${d.xp} XP)`]),f.diff, e=>f.diff=e.target.value);
   const folderSel=sel([["","Aucun dossier"],...S.folders.map(fo=>[fo.id,`${fo.icon} ${fo.title}`])],f.folderId,e=>f.folderId=e.target.value,{width:"100%",marginBottom:"10px",boxSizing:"border-box"});
-  const subsInp =inp("Sous-objectifs (séparés par des virgules)",f.subs,e=>f.subs=e.target.value);
+  const subsInp=inp("Sous-objectifs (séparés par des virgules)",f.subs,e=>f.subs=e.target.value);
+
+  // Progress goal
+  const goalRow=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"},[
+    el("input",{placeholder:"Objectif (ex: 50)",type:"number",min:"1",value:f.goalTarget||"",style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",width:"100%",boxSizing:"border-box"}}),
+    el("input",{placeholder:"Unité (ex: pages, km…)",value:f.goalUnit||"",style:{border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",width:"100%",boxSizing:"border-box"}}),
+  ]);
+  goalRow.children[0].addEventListener("input",e=>f.goalTarget=e.target.value);
+  goalRow.children[1].addEventListener("input",e=>f.goalUnit=e.target.value);
 
   const waitChk=el("input",{type:"checkbox"}); waitChk.checked=f.status==="waiting"; waitChk.addEventListener("change",e=>f.status=e.target.checked?"waiting":"active");
   const waitLbl=el("label",{style:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px",cursor:"pointer"}},[waitChk,"⏳ Démarrer plus tard"]);
@@ -831,7 +854,9 @@ function questForm(q, onSave){
     el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[q?"Modifier la quête":"Nouvelle quête"]),
     titleInp, descInp,
     div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"},[catSel,diffSel]),
-    folderSel, subsInp,
+    folderSel,     el("div",{style:{fontSize:"12px",color:"#6b7280",marginBottom:"6px"}},["Objectif chiffré (optionnel)"]),
+    goalRow,
+    subsInp,
     div({display:"flex",gap:"16px",marginBottom:"14px",flexWrap:"wrap"},[waitLbl]),
     btn(q?"Enregistrer":"Créer",{width:"100%",background:t.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"},()=>{
       if(!f.title.trim()) return;
@@ -842,8 +867,24 @@ function questForm(q, onSave){
   const m=modal(c);
 }
 
-function openCreateQuest(){ questForm(null, f=>{ const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0]; const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean); S.quests.unshift({id:uid(),title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map(()=>false),folderId:f.folderId||null}); save(); render(); }); }
-function openEditQuest(q){ questForm(q, f=>{ const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0]; const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean); Object.assign(q,{title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map((_,i)=>q.subs[i]!==undefined?q.subsChecked[i]:false),folderId:f.folderId||null}); save(); render(); }); }
+function openCreateQuest(){
+  questForm(null, f=>{
+    const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0];
+    const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean);
+    S.quests.unshift({id:uid(),title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map(()=>false),folderId:f.folderId||null,goalTarget:parseInt(f.goalTarget)||0,goalUnit:f.goalUnit||"",goalProgress:0});
+    save(); render();
+  });
+}
+function openEditQuest(q){
+  questForm(q, f=>{
+    const diff=DIFFS.find(d=>d.id===f.diff)||DIFFS[0];
+    const subs=f.subs.split(",").map(s=>s.trim()).filter(Boolean);
+    const newTarget=parseInt(f.goalTarget)||0;
+    Object.assign(q,{title:f.title,desc:f.desc,cat:f.cat,diff:f.diff,xp:diff.xp,status:f.status,subs,subsChecked:subs.map((_,i)=>q.subs[i]!==undefined?q.subsChecked[i]:false),folderId:f.folderId||null,goalTarget:newTarget,goalUnit:f.goalUnit||""});
+    if(!q.goalProgress) q.goalProgress=0;
+    save(); render();
+  });
+}
 
 function folderForm(folder, onSave){
   const t=T();
