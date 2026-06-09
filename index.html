@@ -456,20 +456,30 @@ function questCard(q, T, slim){
   if(q.goalTarget && q.goalTarget>0 && !isDone){
     var prog = q.goalProgress||0;
     var pct  = Math.min(100, Math.round((prog/q.goalTarget)*100));
+
     var goalWrap = div({marginTop:"10px",background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px"});
-    goalWrap.appendChild(div({display:"flex",justifyContent:"space-between",marginBottom:"4px"},[
+
+    var progLabel = div({display:"flex",justifyContent:"space-between",marginBottom:"4px"},[
       el("span",{style:{fontSize:"12px",fontWeight:"600",color:"#374151"}},[prog+" / "+q.goalTarget+" "+q.goalUnit]),
       el("span",{style:{fontSize:"12px",fontWeight:"700",color:pct>=100?T.p:"#6b7280"}},[pct+"% "+(pct>=100?"✓":"")])
-    ]));
-    goalWrap.appendChild(div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"8px"}),[
-      div({background:T.p,width:pct+"%",height:"6px",borderRadius:"4px",transition:"width 0.3s"})
     ]);
+    goalWrap.appendChild(progLabel);
+
+    var barBg = div({background:"#e5e7eb",borderRadius:"4px",height:"6px",marginBottom:"8px"});
+    var barFg = document.createElement("div");
+    barFg.style.background    = T.p;
+    barFg.style.width         = pct+"%";
+    barFg.style.height        = "6px";
+    barFg.style.borderRadius  = "4px";
+    barFg.style.transition    = "width 0.3s";
+    barBg.appendChild(barFg);
+    goalWrap.appendChild(barBg);
+
     var addInp = el("input",{type:"number",min:"0",placeholder:"+ "+q.goalUnit,style:{flex:"1",border:"1px solid #e5e7eb",borderRadius:"8px",padding:"6px 10px",fontSize:"13px"}});
     var addBtn = btn("+",{background:T.p,color:"#fff",border:"none",borderRadius:"8px",padding:"6px 12px",fontWeight:"600",minWidth:"36px"}, function(){
       var val = parseFloat(addInp.value);
       if(!val || val<=0) return;
       q.goalProgress = Math.min(q.goalTarget, (q.goalProgress||0)+val);
-      addInp.value="";
       save(); render();
     });
     var addRow = div({display:"flex",gap:"6px"});
@@ -993,8 +1003,20 @@ function questForm(q, T, onSave){
   var goalTgtInp  = el("input",{type:"number",min:"1",placeholder:"Objectif (ex: 50)",value:q&&q.goalTarget?String(q.goalTarget):"",style:{width:"100%",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 12px",fontSize:"14px",boxSizing:"border-box"}});
   var goalUnitInp = mkInput("Unité (pages, km…)", q?q.goalUnit:"", {marginBottom:"0"});
   var subsInp     = mkInput("Sous-objectifs (séparés par des virgules)", q&&q.subs?q.subs.join(", "):"");
-  var waitChk     = el("input",{type:"checkbox"}); waitChk.checked = !!(q && q.status==="waiting");
-  var waitLbl     = el("label",{style:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px",cursor:"pointer"}},[waitChk,"⏳ Démarrer plus tard"]);
+  // Waiting toggle — proper styled checkbox
+  var waitRow  = div({display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",cursor:"pointer"});
+  var waitState = !!(q && q.status==="waiting");
+  var waitBox  = div({width:"20px",height:"20px",borderRadius:"6px",border:"2px solid "+(waitState?"#f59e0b":"#d1d5db"),background:waitState?"#fef3c7":"#fff",flexShrink:"0",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"});
+  if(waitState) waitBox.appendChild(el("span",{style:{fontSize:"13px"}},["✓"]));
+  var waitTxt = el("span",{style:{fontSize:"13px",color:"#374151"}},["⏳ Démarrer plus tard"]);
+  waitRow.appendChild(waitBox);
+  waitRow.appendChild(waitTxt);
+  waitRow.addEventListener("click", function(){
+    waitState = !waitState;
+    waitBox.style.border     = "2px solid "+(waitState?"#f59e0b":"#d1d5db");
+    waitBox.style.background = waitState?"#fef3c7":"#fff";
+    waitBox.innerHTML = waitState ? "<span style='font-size:13px'>✓</span>" : "";
+  });
 
   var c = div({});
   c.appendChild(el("div",{style:{fontWeight:"700",fontSize:"17px",color:"#111827",marginBottom:"16px"}},[q?"Modifier la quête":"Nouvelle quête"]));
@@ -1011,7 +1033,8 @@ function questForm(q, T, onSave){
   goalRow.appendChild(goalTgtInp); goalRow.appendChild(goalUnitInp);
   c.appendChild(goalRow);
   c.appendChild(subsInp);
-  c.appendChild(div({display:"flex",gap:"16px",marginBottom:"14px",flexWrap:"wrap"},[waitLbl]));
+  c.appendChild(div({display:"flex",gap:"16px",marginBottom:"0",flexWrap:"wrap"},[waitRow]));
+  c.appendChild(div({marginBottom:"14px"}));
 
   c.appendChild(btn(q?"Enregistrer":"Créer",{width:"100%",background:T.p,color:"#fff",border:"none",borderRadius:"12px",padding:"13px",fontWeight:"700",fontSize:"15px",marginBottom:"8px"}, function(){
     if(!titleInp.value.trim()){ titleInp.style.border="1px solid #ef4444"; titleInp.focus(); return; }
@@ -1024,7 +1047,7 @@ function questForm(q, T, onSave){
       goalTarget: parseInt(goalTgtInp.value,10)||0,
       goalUnit:   goalUnitInp.value.trim(),
       subs:       subsInp.value,
-      status:     waitChk.checked?"waiting":"active"
+      status:     waitState?"waiting":"active"
     });
     m.remove();
   }));
@@ -1182,8 +1205,9 @@ function confirmResetProfil(T){
     save();
     m.remove();
     currentTab = "home";
+    // Wipe UI completely then show onboarding which calls render() itself
     document.getElementById("app").innerHTML="";
-    showOnboarding(function(){ render(); });
+    showOnboarding(null);
   }));
   c.appendChild(btn("Annuler",{width:"100%",background:"transparent",color:"#6b7280",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px",fontSize:"14px"}, function(){ m.remove(); }));
   var m = modal(c);
@@ -1234,8 +1258,11 @@ function showOnboarding(onDone){
     S.playerName   = name;
     S.playerAvatar = chosen;
     save();
-    if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
-    onDone();
+    // Remove the onboarding wrapper then go home
+    if(wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+    currentTab = "home";
+    render();
+    if(onDone) onDone();
   }));
 
   var app = document.getElementById("app");
